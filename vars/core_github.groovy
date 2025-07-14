@@ -1,0 +1,56 @@
+def checkout(String repoURL = '', String branch = '', Map config = [:]) {
+    if (!repoURL?.trim()) {
+        Logger.warning("No repository URL provided. Using default SCM checkout")
+        try {
+            checkout scm
+            return true
+        } catch (Exception e) {
+            Logger.error("SCM checkout failed: ${e.getMessage()}")
+            return false
+        }
+    }
+    
+    def checkoutBranch = branch ?: config.branch ?: 'main'
+    Logger.info("Checking out ${repoURL} on branch ${checkoutBranch}")
+    
+    try {
+        checkout([
+            $class: 'GitSCM',
+            branches: [[name: checkoutBranch]],
+            extensions: [[$class: 'CloneOption', timeout: 5]],
+            userRemoteConfigs: [[url: repoURL]]
+        ])
+        return true
+    } catch (Exception e) {
+        Logger.error("Checkout failed: ${e.getMessage()}")
+        return false
+    }
+}
+
+def validateRepoAccess(String repoUrl) {
+    try {
+        def timeout = 5 // seconds
+        // def status = sh(
+        //     script: "git ls-remote --exit-code ${repoUrl}",
+        //     returnStatus: true,
+        //     timeout: timeout
+        // )
+
+        def status = bat(
+            script: "git ls-remote --exit-code ${repoUrl}",
+            returnStatus: true,
+            timeout: timeout
+        )
+
+        
+        if (status == 0) {
+            Logger.info("Repository access validated")
+            return true
+        }
+        Logger.error("Repository validation failed (status ${status})")
+        return false
+    } catch (Exception e) {
+        Logger.error("Validation error: ${e.getMessage()}")
+        return false
+    }
+}
