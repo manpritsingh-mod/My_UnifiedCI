@@ -29,7 +29,7 @@ def task_languageDetection(){
     }
     else if (fileExists('requirements.txt') || fileExists('setup.py') || fileExists('pyproject.toml')){
         detectedLanguage = 'python'
-        Logger.info("Detected Python Project (requirement.txt found)")
+        Logger.info("Detected Python Project (requirements.txt found)")
     }
     else{
         Logger.warning("Could not detect project language !!")
