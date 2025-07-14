@@ -32,11 +32,6 @@ def call(Map config = [:]) {
     }
     
     stage('Lint') {
-        when {
-            expression {
-                return core_utils.shouldExecuteStage('lint', config)
-            }
-        }
         script {
             Logger.info("LINTING STAGE")
             lint_utils.runLint(config)
@@ -51,11 +46,6 @@ def call(Map config = [:]) {
     }
     
     stage('Unit Test') {
-        when {
-            expression {
-                return core_utils.shouldExecuteStage('unittest', config)
-            }
-        }
         script {
             Logger.info("UNIT-TEST STAGE")
             core_test.runUnitTest(config)
