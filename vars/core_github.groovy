@@ -14,12 +14,9 @@ def checkout(String repoURL = '', String branch = '', Map config = [:]) {
     Logger.info("Checking out ${repoURL} on branch ${checkoutBranch}")
     
     try {
-        checkout([
-            $class: 'GitSCM',
-            branches: [[name: checkoutBranch]],
-            extensions: [[$class: 'CloneOption', timeout: 5]],
-            userRemoteConfigs: [[url: repoURL]]
-        ])
+        // Use GitHubManager to get SCM configuration
+        def scmConfig = GitHubManager.getCheckoutScmConfig(repoURL, checkoutBranch)
+        checkout(scmConfig)
         return true
     } catch (Exception e) {
         Logger.error("Checkout failed: ${e.getMessage()}")
@@ -29,19 +26,20 @@ def checkout(String repoURL = '', String branch = '', Map config = [:]) {
 
 def validateRepoAccess(String repoUrl) {
     try {
+        // Use GitHubManager to get validation configuration
+        def validationResult = GitHubManager.validateRepoAccess(repoUrl)
+        
+        if (!validationResult.valid) {
+            Logger.error(validationResult.error)
+            return false
+        }
+        
         def timeout = 5 // seconds
-        // def status = sh(
-        //     script: "git ls-remote --exit-code ${repoUrl}",
-        //     returnStatus: true,
-        //     timeout: timeout
-        // )
-
         def status = bat(
-            script: "git ls-remote --exit-code ${repoUrl}",
+            script: validationResult.command,
             returnStatus: true,
             timeout: timeout
         )
-
         
         if (status == 0) {
             Logger.info("Repository access validated")
