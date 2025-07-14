@@ -3,16 +3,27 @@ class GradleScript {
         return "./gradlew build"
     }
     
-    static String testCommand(String testTool = 'junit') { // doubt in this here how to give dynamically??? I have give static value for now!!
-        return "./gradlew test" 
+    static String testCommand(String testTool = 'junit') {
+        // Now testTool is actually USED in the command
+        switch(testTool) {
+            case 'junit':
+            case 'junit5':
+                return "./gradlew test"
+            case 'testng':
+                return "./gradlew test --tests '*TestNG*'"
+            case 'spock':
+                return "./gradlew test --tests '*Spec'"
+            default:
+                return "./gradlew test -Dtest.framework=${testTool}"
+        }
     }
     
-    static String lintCommand(String lintTool = 'checkstyle') { // doubt in this here how to give dynamically??? I have give static value for now!!
-        def command = "./gradlew ${lintTool}Main"
-        if (lintTool != 'checkstyle' && lintTool != 'spotbugs') {
-            throw new IllegalArgumentException("Unknown lint tool: $lintTool")
+    static String lintCommand(String lintTool = 'checkstyle') {
+        switch(lintTool) {
+            case 'checkstyle': return "./gradlew checkstyleMain"
+            case 'spotbugs': return "./gradlew spotbugsMain"
+            default: throw new IllegalArgumentException("Unknown lint tool: $lintTool")
         }
-        return command
     }
     
     static String installDependenciesCommand() {
