@@ -8,9 +8,9 @@ class GradleScript {
     }
     
     static String lintCommand(String lintTool = 'checkstyle') { // doubt in this here how to give dynamically??? I have give static value for now!!
-        def command = "./gradlew ${tool}Main"
-        if (tool != 'checkstyle' && tool != 'spotbugs') {
-            throw new IllegalArgumentException("Unknown lint tool: $tool")
+        def command = "./gradlew ${lintTool}Main"
+        if (lintTool != 'checkstyle' && lintTool != 'spotbugs') {
+            throw new IllegalArgumentException("Unknown lint tool: $lintTool")
         }
         return command
     }

@@ -64,7 +64,7 @@ def buildGradleApp(Map config = [:]){
     }
 }
 
-private Boolean task_buildGradleApp(Map config[:]){
+private Boolean task_buildGradleApp(Map config = [:]){
     Logger.info("Gradle build logic execution")
     // sh script: GradleScript.buildCommand()
     bat script: GradleScript.buildCommand()
@@ -75,7 +75,7 @@ private Boolean task_buildGradleApp(Map config[:]){
 def buildPythonApp(Map config = [:]) {
     Logger.info("Building Python app")
     try{
-        if (!installDependencies('python', 'pip' config)){
+        if (!installDependencies('python', 'pip', config)){
         return false
         }
         return task_buildPythonApp(config)
@@ -95,6 +95,7 @@ private Boolean task_buildPythonApp(Map config) {
     return true
 }
 
+
 def installDependencies(String language, String buildTool, Map config = [:]){
     Logger.info("Installing the dependencies for the ${language} with ${buildTool}")
 
@@ -108,10 +109,10 @@ def installDependencies(String language, String buildTool, Map config = [:]){
                 Logger.error("Unsupported language for dependencies installation")
                 return false
         }
-        catch(Exception e){
-            Logger.error("Dependenceis installation failed: ${e.getMessage()}")
-            return false
-        }
+    }
+    catch(Exception e){
+        Logger.error("Dependencies installation failed: ${e.getMessage()}")
+        return false
     }
 }
 
@@ -168,11 +169,11 @@ def installPythonDependencies(Map config = [:]){
 def task_pythonDependencies(Map config = [:]){
     Logger.info("Python Dependencies logic")
 
-    if(fileExists('requirement.txt')){
+    if(fileExists('requirements.txt')){
         // sh script: PythonScript.installDependenciesCommand()
         bat script: PythonScript.installDependenciesCommand()
     }
 
     Logger.info("Python Dependencies installed successfully")
     return true
-}
+
