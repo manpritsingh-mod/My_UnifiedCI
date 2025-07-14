@@ -15,9 +15,6 @@ def buildJavaApp(String buildTool, Map config = [:]){
     Logger.info("Building Java Project with ${buildTool}")
 
     try{
-        if(!installDependencies('java', buildTool, config)){ // basically this ensure that all the dependencies has been installed before the build process begins
-            return false
-        }
         if(buildTool == 'maven'){
             return buildMavenApp(config)
         }
@@ -75,9 +72,6 @@ private Boolean task_buildGradleApp(Map config = [:]){
 def buildPythonApp(Map config = [:]) {
     Logger.info("Building Python app")
     try{
-        if (!installDependencies('python', 'pip', config)){
-        return false
-        }
         return task_buildPythonApp(config)
     }
     catch(Exception e){
