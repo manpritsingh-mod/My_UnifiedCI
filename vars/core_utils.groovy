@@ -41,17 +41,17 @@ def task_languageDetection(){
 def setupProjectEnvironment(String language, Map config = [:]){
     Logger.info("Setting up project environment for language: ${language}")
     switch(language){
-        case 'java-maven'
+        case 'java-maven':
             env.BUILD_TOOL = 'maven'
             env.BUILD_COMMAND = 'mvn'
             env.TEST_COMMAND = 'mvn test'
             break
-        case 'java-gradle'
+        case 'java-gradle':
             env.BUILD_TOOL = 'gradle'
             env.BUILD_COMMAND = './gradlew'
             env.TEST_COMMAND = 'gradlew test'
             break
-        case 'python'
+        case 'python':
             env.BUILD_TOOL = 'pip'
             env.BUILD_COMMAND = 'pip'
             env.TEST_COMMAND = 'pytest'
