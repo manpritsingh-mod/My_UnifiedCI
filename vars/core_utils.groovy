@@ -79,10 +79,18 @@ def readProjectConfig(){
     def config = [:] // empty map
     if (configFile){
         try {
-            config = readYaml file: configFile
-            Logger.info("Configuration loaded from ${configFile}")
+            // Check if readYaml is available (Pipeline Utility Steps plugin)
+            if (this.metaClass.respondsTo(this, 'readYaml')) {
+                config = readYaml file: configFile
+                Logger.info("Configuration loaded from ${configFile}")
+            } else {
+                Logger.warning("Pipeline Utility Steps plugin not installed - cannot read YAML files")
+                Logger.info("Using default configuration instead")
+                config = getDefaultConfig()
+            }
         } catch (Exception e) {
             Logger.error("Failed to read YAML: ${e.getMessage()}")
+            Logger.info("Falling back to default configuration")
             config = getDefaultConfig()
         }
     }
