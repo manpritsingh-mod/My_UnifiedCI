@@ -1,18 +1,10 @@
 def call(Map config = [:]) {
     Logger.info("Starting Java Maven Template Pipeline")
     
-    // Get configuration from environment variable if not passed
+    // Use default configuration if not passed
     if (!config) {
-        if (env.PROJECT_CONFIG && env.PROJECT_CONFIG.trim() != '') {
-                config = readJSON text: env.PROJECT_CONFIG
-            } else {
-                Logger.warning("PROJECT_CONFIG environment variable is empty or not set")
-                config = core_utils.getDefaultConfig()
-            }
-        } catch (Exception e) {
-            Logger.error("Failed to parse PROJECT_CONFIG JSON: ${e.getMessage()}")
-            config = core_utils.getDefaultConfig()
-        }
+        Logger.info("No config provided, using default configuration")
+        config = core_utils.getDefaultConfig()
     }
     
     // Execute Maven-specific pipeline stages
