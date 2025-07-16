@@ -73,7 +73,6 @@ def setupProjectEnvironment(String language, Map config = [:]){
 def readProjectConfig() {
     echo "Reading project configuration"
 
-    // Determine which config file exists
     def configFile = fileExists('ci-config.yaml') ? 'ci-config.yaml' : 
                      (fileExists('ci-config.yml') ? 'ci-config.yml' : null)
 
@@ -87,29 +86,24 @@ def readProjectConfig() {
     def fileContent = readFile(configFile)
     echo "File content:\n${fileContent}"
 
-    def config = [:]  // empty map
+    def config = [:]
 
     try {
-        // Check if readYaml is available (Pipeline Utility Steps plugin)
-        if (this.metaClass.respondsTo(this, 'readYaml')) {
-            // Parse YAML from string content, not from file again
-            config = readYaml text: fileContent
-            echo "Parsed config map: ${config}"
-        } else {
-            echo "Pipeline Utility Steps plugin not installed - cannot read YAML files"
-            echo "Using default configuration instead"
-            config = getDefaultConfig()
-        }
+        // Try parsing YAML directly
+        config = readYaml text: fileContent
+        echo "Parsed config map: ${config}"
+    } catch (MissingMethodException e) {
+        echo "readYaml method not found (Pipeline Utility Steps plugin missing)"
+        echo "Using default configuration instead"
+        config = getDefaultConfig()
     } catch (Exception e) {
         echo "Failed to read YAML: ${e.getMessage()}"
         echo "Falling back to default configuration"
         config = getDefaultConfig()
     }
 
-    // Validate and set defaults before returning
     return validateAndSetDefaults(config)
 }
-
 
 
 def validateAndSetDefaults(Map config){
