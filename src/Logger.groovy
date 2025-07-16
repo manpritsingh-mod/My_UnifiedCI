@@ -10,6 +10,6 @@ class Logger {
     }
     private static void logMessage(String level, String message) {
         def timestamp = new Date().format("yyyy-MM-dd HH:mm:ss")
-        println "[${level}] [${timestamp}] ${message}"
+        echo "[${level}] [${timestamp}] ${message}"
     }
 }
