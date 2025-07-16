@@ -70,6 +70,30 @@ def setupProjectEnvironment(String language, Map config = [:]){
     return true
 }
 
+static Map sanitizeMap(Map original) {
+    def sanitized = [:]
+    original.each { key, value ->
+        def newKey = key.toString()
+        def newValue
+        if (value instanceof Map) {
+            newValue = sanitizeMap(value) // recursive call
+        } else if (value instanceof List) {
+            // sanitize each element if it is a Map
+            newValue = value.collect { item ->
+                if (item instanceof Map) {
+                    sanitizeMap(item)
+                } else {
+                    item.toString()
+                }
+            }
+        } else {
+            newValue = value.toString()
+        }
+        sanitized[newKey] = newValue
+    }
+    return sanitized
+}
+
 def readProjectConfig() {
     echo "Reading project configuration"
 
@@ -102,7 +126,8 @@ def readProjectConfig() {
         config = getDefaultConfig()
     }
 
-    return validateAndSetDefaults(config)
+    def sanitizedConfig = sanitizeMap(config)
+    return validateAndSetDefaults(sanitizedConfig)
 }
 
 
