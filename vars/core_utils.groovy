@@ -71,11 +71,12 @@ def setupProjectEnvironment(String language, Map config = [:]){
 }
 
 def readProjectConfig(){
-    Logger.info("Reading project configuration")
+    // Logger.info("Reading project configuration")
+    echo "Reading project configuration"
     
     def configFile = fileExists('ci-config.yaml') ? 'ci-config.yaml' : 
                     (fileExists('ci-config.yml') ? 'ci-config.yml' : null)
-    Logger.info("Configuration loaded from ${configFile}")
+    echo "File ${configFile} exists in workspace"
     
     def config = [:] // empty map
     if (configFile){
