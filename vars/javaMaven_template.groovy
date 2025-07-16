@@ -39,17 +39,11 @@ def call(Map config = [:]) {
     }
     
     stage('Lint') {
-        when{
-                expression{
-                   return core_utils.shouldExecuteStage('lint', config)
-                }
-            }
-        steps{
-            // Logger.info("LINTING STAGE")
+        if (core_utils.shouldExecuteStage('lint', config)) {
             echo "LINTING STAGE"
-            script {
-                lint_utils.runLint(config)
-            }
+            lint_utils.runLint(config)
+        } else {
+            echo "Linting is disabled - skipping"
         }
     }
     
@@ -62,17 +56,11 @@ def call(Map config = [:]) {
     }
     
     stage('Unit Test') {
-        when{
-                expression{
-                   return core_utils.shouldExecuteStage('unittest', config)
-                }
-            }
-        steps{
-            // Logger.info("UNIT-TEST STAGE")
+        if (core_utils.shouldExecuteStage('unittest', config)) {
             echo "UNIT-TEST STAGE"
-            script {
-                core_test.runUnitTest(config)
-            }
+            core_test.runUnitTest(config)
+        } else {
+            echo "Unit test is disabled - skipping"
         }
     }
     
