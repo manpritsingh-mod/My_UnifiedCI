@@ -82,6 +82,7 @@ def readProjectConfig(){
             // Check if readYaml is available (Pipeline Utility Steps plugin)
             if (this.metaClass.respondsTo(this, 'readYaml')) {
                 config = readYaml file: configFile
+                Logger.info("Config map content: ${config}")
                 Logger.info("Configuration loaded from ${configFile}")
             } else {
                 Logger.warning("Pipeline Utility Steps plugin not installed - cannot read YAML files")
