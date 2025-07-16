@@ -77,6 +77,10 @@ def readProjectConfig(){
     def configFile = fileExists('ci-config.yaml') ? 'ci-config.yaml' : 
                     (fileExists('ci-config.yml') ? 'ci-config.yml' : null)
     echo "File ${configFile} exists in workspace"
+    def fileContent = readFile(configFile)
+        // Print file content to console to verify
+    echo "Reading content of file: ${configFile}"
+    echo "File content:\n${fileContent}"
     
     def config = [:] // empty map
     if (configFile){
