@@ -2,10 +2,10 @@ def runLint(Map config = [:]) {
     Logger.info("Starting lint")
     
     try {
-        if (!core_utils.shouldExecuteStage('lint', config)) { // checking for the linting should be executed or to be skipped
-            Logger.info("Lint tests are disabled - skipping") // will be removed only written for the asking purpose
-            return true
-        }
+        // if (!core_utils.shouldExecuteStage('lint', config)) { // checking for the linting should be executed or to be skipped
+        //     Logger.info("Lint tests are disabled - skipping") // will be removed only written for the asking purpose
+        //     return true
+        // }
 
         def language = config.project_language
         def lintTool = getLintTool(language, config)
