@@ -70,44 +70,47 @@ def setupProjectEnvironment(String language, Map config = [:]){
     return true
 }
 
-def readProjectConfig(){
-    // Logger.info("Reading project configuration")
+def readProjectConfig() {
     echo "Reading project configuration"
-    
+
+    // Determine which config file exists
     def configFile = fileExists('ci-config.yaml') ? 'ci-config.yaml' : 
-                    (fileExists('ci-config.yml') ? 'ci-config.yml' : null)
-    echo "File ${configFile} exists in workspace"
+                     (fileExists('ci-config.yml') ? 'ci-config.yml' : null)
+
+    if (configFile == null) {
+        echo "No config file found, using default configuration"
+        return getDefaultConfig()
+    }
+
+    echo "Config file found: ${configFile}"
+
     def fileContent = readFile(configFile)
-        // Print file content to console to verify
-    echo "Reading content of file: ${configFile}"
     echo "File content:\n${fileContent}"
-    
-    def config = [:] // empty map
-    if (configFile){
-        try {
-            // Check if readYaml is available (Pipeline Utility Steps plugin)
-            if (this.metaClass.respondsTo(this, 'readYaml')) {
-                config = readYaml file: configFile
-                echo "Config map content: ${config}"
-                Logger.info("Configuration loaded from ${configFile}")
-            } else {
-                Logger.warning("Pipeline Utility Steps plugin not installed - cannot read YAML files")
-                Logger.info("Using default configuration instead")
-                config = getDefaultConfig()
-            }
-        } catch (Exception e) {
-            Logger.error("Failed to read YAML: ${e.getMessage()}")
-            Logger.info("Falling back to default configuration")
+
+    def config = [:]  // empty map
+
+    try {
+        // Check if readYaml is available (Pipeline Utility Steps plugin)
+        if (this.metaClass.respondsTo(this, 'readYaml')) {
+            // Parse YAML from string content, not from file again
+            config = readYaml text: fileContent
+            echo "Parsed config map: ${config}"
+        } else {
+            echo "Pipeline Utility Steps plugin not installed - cannot read YAML files"
+            echo "Using default configuration instead"
             config = getDefaultConfig()
         }
-    }
-    else{
-        Logger.warning("No config file found, using defaults")
+    } catch (Exception e) {
+        echo "Failed to read YAML: ${e.getMessage()}"
+        echo "Falling back to default configuration"
         config = getDefaultConfig()
     }
-    
+
+    // Validate and set defaults before returning
     return validateAndSetDefaults(config)
 }
+
+
 
 def validateAndSetDefaults(Map config){
     if (!config.project_language){
