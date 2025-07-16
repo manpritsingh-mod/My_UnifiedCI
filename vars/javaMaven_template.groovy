@@ -1,5 +1,7 @@
 def call(Map config = [:]) {
-    Logger.info("Starting Java Maven Template Pipeline")
+    // Logger.info("Starting Java Maven Template Pipeline")
+    echo "Starting Java Maven Template Pipeline"
+    echo "Result of the config file ${config}"
     
     // Use default configuration if not passed
     if (!config) {
