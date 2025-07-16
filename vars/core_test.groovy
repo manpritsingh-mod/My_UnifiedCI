@@ -2,10 +2,10 @@ def runUnitTest(Map config = [:]) {
     Logger.info("Starting unit test execution")
     
     try {
-        if (!core_utils.shouldExecuteStage('unittest', config)) { // checking for the UnitTest should be executed or to be skipped
-            Logger.info("Unit tests are disabled - skipping")
-            return true
-        }
+        // if (!core_utils.shouldExecuteStage('unittest', config)) { // checking for the UnitTest should be executed or to be skipped
+        //     Logger.info("Unit tests are disabled - skipping")
+        //     return true
+        // }
 
         def language = config.project_language // 
         def testTool = getUnitTestTool(language, config)
