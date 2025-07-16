@@ -75,6 +75,7 @@ def readProjectConfig(){
     
     def configFile = fileExists('ci-config.yaml') ? 'ci-config.yaml' : 
                     (fileExists('ci-config.yml') ? 'ci-config.yml' : null)
+    Logger.info("Configuration loaded from ${configFile}")
     
     def config = [:] // empty map
     if (configFile){
