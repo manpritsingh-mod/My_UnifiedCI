@@ -1,15 +1,29 @@
-class Logger {
-    static void info(String message) {
-        logMessage('INFO', message)
+class Logger implements Serializable {
+    private static Logger instance
+    private def script
+
+    private Logger(def script) {
+        this.script = script
     }
-    static void warning(String message) {
-        logMessage('WARNING', message)
+
+    static void init(def script) {
+        instance = new Logger(script)
     }
-    static void error(String message) {
-        logMessage('ERROR', message)
+
+    static void info(String msg) {
+        instance?.log("INFO", msg)
     }
-    private static void logMessage(String level, String message) {
+
+    static void warning(String msg) {
+        instance?.log("WARNING", msg)
+    }
+
+    static void error(String msg) {
+        instance?.log("ERROR", msg)
+    }
+
+    private void log(String level, String msg) {
         def timestamp = new Date().format("yyyy-MM-dd HH:mm:ss")
-        echo "[${level}] [${timestamp}] ${message}"
+        script.echo "[${level}] [${timestamp}] ${msg}"
     }
 }
