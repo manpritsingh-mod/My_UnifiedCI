@@ -44,10 +44,12 @@ def call(Map config = [:]) {
                    return core_utils.shouldExecuteStage('lint', config)
                 }
             }
-        script {
+        steps{
             // Logger.info("LINTING STAGE")
             echo "LINTING STAGE"
-            lint_utils.runLint(config)
+            script {
+                lint_utils.runLint(config)
+            }
         }
     }
     
@@ -65,10 +67,12 @@ def call(Map config = [:]) {
                    return core_utils.shouldExecuteStage('unittest', config)
                 }
             }
-        script {
+        steps{
             // Logger.info("UNIT-TEST STAGE")
             echo "UNIT-TEST STAGE"
-            core_test.runUnitTest(config)
+            script {
+                core_test.runUnitTest(config)
+            }
         }
     }
     
