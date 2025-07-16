@@ -41,7 +41,7 @@ def call(Map config = [:]) {
     stage('Lint') {
         when{
                 expression{
-                    core_utils.shouldExecuteStage('lint', config)
+                   return core_utils.shouldExecuteStage('lint', config)
                 }
             }
         script {
@@ -62,7 +62,7 @@ def call(Map config = [:]) {
     stage('Unit Test') {
         when{
                 expression{
-                    core_utils.shouldExecuteStage('unittest', config)
+                   return core_utils.shouldExecuteStage('unittest', config)
                 }
             }
         script {
