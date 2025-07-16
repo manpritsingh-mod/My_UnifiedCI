@@ -39,6 +39,12 @@ def call(Map config = [:]) {
     }
     
     stage('Lint') {
+        when{
+                expression{
+                    core_utils.shouldExecuteStage('lint', config)
+                    echo "Lint are disabled - skipping"
+                }
+            }
         script {
             // Logger.info("LINTING STAGE")
             echo "LINTING STAGE"
@@ -55,6 +61,12 @@ def call(Map config = [:]) {
     }
     
     stage('Unit Test') {
+        when{
+                expression{
+                    core_utils.shouldExecuteStage('unittest', config)
+                    echo "Unit tests are disabled - skipping"
+                }
+            }
         script {
             // Logger.info("UNIT-TEST STAGE")
             echo "UNIT-TEST STAGE"
