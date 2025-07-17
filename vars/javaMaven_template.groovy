@@ -26,7 +26,7 @@ def call(Map config = [:]) {
             core_utils.setupProjectEnvironment(config.project_language, config)
             // Use bat for Windows compatibility
             bat 'java -version'
-            // bat 'mvn -version'
+            bat 'mvn -version'
         }
     }
     
