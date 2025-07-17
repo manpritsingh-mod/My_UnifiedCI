@@ -1,45 +1,54 @@
 def setupEnvironment(){
-    Logger.info("Setting up Build Environment")
+    // Logger.info("Setting up Build Environment")
+    echo "Setting up Build Environment"
 
     env.BUILD_TIMESTAMP = new Date().format("yyyy-MM-dd_HH-mm-ss")
     env.BUILD_USER = env.BUILD_USER ?: 'jenkins'
 
-    Logger.info("Environment variables set - Timestamp: ${env.BUILD_TIMESTAMP}, User: ${env.BUILD_USER}")
+    // Logger.info("Environment variables set - Timestamp: ${env.BUILD_TIMESTAMP}, User: ${env.BUILD_USER}")
+    echo "Environment variables set - Timestamp: ${env.BUILD_TIMESTAMP}, User: ${env.BUILD_USER}"
     return true
 }
 
 def detectProjectLanguage(){
-    Logger.info("Detecting project language")
+    // Logger.info("Detecting project language")
+    echo "Detecting project language" 
 
     return task_languageDetection()
 }
 
 def task_languageDetection(){
-    Logger.info("Executing language detection logic")
+    // Logger.info("Executing language detection logic")
+    echo "Executing language detection logic"
 
     def detectedLanguage = null
 
     if(fileExists('pom.xml')){
         detectedLanguage = 'java-maven'
-        Logger.info("Detected Java-Maven project (pom.xml found)")
+        // Logger.info("Detected Java-Maven project (pom.xml found)")
+        echo "Detected Java-Maven project (pom.xml found)"
     }
     else if (fileExists('build.gradle') || fileExists('build.gradle.kts')){
         detectedLanguage = 'java-gradle'
-        Logger.info("Detected Java-gradle project (build.gradle found)")
+        // Logger.info("Detected Java-gradle project (build.gradle found)")
+        echo "Detected Java-gradle project (build.gradle found)"        
     }
     else if (fileExists('requirements.txt') || fileExists('setup.py') || fileExists('pyproject.toml')){
         detectedLanguage = 'python'
-        Logger.info("Detected Python Project (requirements.txt found)")
+        // Logger.info("Detected Python Project (requirements.txt found)")
+        echo "Detected Python Project (requirements.txt found)"
     }
     else{
-        Logger.warning("Could not detect project language !!")
+        // Logger.warning("Could not detect project language !!")
+        echo "Could not detect project language !!"
         detectedLanguage = 'unknown'
     }
     return detectedLanguage
 }
 
 def setupProjectEnvironment(String language, Map config = [:]){
-    Logger.info("Setting up project environment for language: ${language}")
+    // Logger.info("Setting up project environment for language: ${language}")
+    echo "Setting up project environment for language: ${language}"
     switch(language){
         case 'java-maven':
             env.BUILD_TOOL = 'maven'
@@ -57,7 +66,8 @@ def setupProjectEnvironment(String language, Map config = [:]){
             env.TEST_COMMAND = 'pytest'
             break
         default:
-            Logger.warning("Unknown Language ${language}")
+            // Logger.warning("Unknown Language ${language}")
+            echo "Unknown Language ${language}"
     }
 
     if(config.runUnitTests != null){
@@ -66,7 +76,8 @@ def setupProjectEnvironment(String language, Map config = [:]){
     if(config.runLintTests != null){
         env.RUN_LINT_TESTS = config.runLintTests.toString()
     }
-    Logger.info("Project environment setup completed")
+    // Logger.info("Project environment setup completed")
+    echo "Project environment setup completed"
     return true
 }
 
@@ -108,7 +119,8 @@ def readProjectConfig() {
 def validateAndSetDefaults(Map config){
     if (!config.project_language){
         config.project_language = detectProjectLanguage()
-        Logger.warning("No language specified, detected: ${config.project_language}")
+        // Logger.warning("No language specified, detected: ${config.project_language}")
+        echo "No language specified, detected: ${config.project_language}"
     }
     
     // Set default tools checks for any value has been set or not 
@@ -134,7 +146,8 @@ def validateAndSetDefaults(Map config){
 }
 
 def getDefaultConfig(){
-    Logger.info("Using Default Configuration -> All the stages will run by default")
+    // Logger.info("Using Default Configuration -> All the stages will run by default")
+    echo "Using Default Configuration -> All the stages will run by default"
 
     def config =[
         project_language: detectProjectLanguage(),
