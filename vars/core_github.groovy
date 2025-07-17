@@ -1,17 +1,20 @@
 def checkout(String repoURL = '', String branch = '', Map config = [:]) {
     if (!repoURL?.trim()) {
-        Logger.warning("No repository URL provided. Using default SCM checkout")
+        // Logger.warning("No repository URL provided. Using default SCM checkout")
+        echo "No repository URL provided. Using default SCM checkout"
         try {
             checkout scm
             return true
         } catch (Exception e) {
-            Logger.error("SCM checkout failed: ${e.getMessage()}")
+            // Logger.error("SCM checkout failed: ${e.getMessage()}")
+            echo "SCM checkout failed: ${e.getMessage()}"
             return false
         }
     }
     
     def checkoutBranch = branch ?: config.branch ?: 'main'
-    Logger.info("Checking out ${repoURL} on branch ${checkoutBranch}")
+    // Logger.info("Checking out ${repoURL} on branch ${checkoutBranch}")
+    echo "Checking out ${repoURL} on branch ${checkoutBranch}"
     
     try {
         // Use GitHubManager to get SCM configuration
@@ -19,7 +22,8 @@ def checkout(String repoURL = '', String branch = '', Map config = [:]) {
         checkout(scmConfig)
         return true
     } catch (Exception e) {
-        Logger.error("Checkout failed: ${e.getMessage()}")
+        // Logger.error("Checkout failed: ${e.getMessage()}")
+        echo "Checkout failed: ${e.getMessage()}"        
         return false
     }
 }
@@ -42,13 +46,16 @@ def validateRepoAccess(String repoUrl) {
         )
         
         if (status == 0) {
-            Logger.info("Repository access validated")
+            // Logger.info("Repository access validated")
+            echo "Repository access validated"
             return true
         }
-        Logger.error("Repository validation failed (status ${status})")
+        // Logger.error("Repository validation failed (status ${status})")
+        echo "Repository validation failed (status ${status})"
         return false
     } catch (Exception e) {
-        Logger.error("Validation error: ${e.getMessage()}")
+        // Logger.error("Validation error: ${e.getMessage()}")
+        echo "Validation error: ${e.getMessage()}"        
         return false
     }
 }
