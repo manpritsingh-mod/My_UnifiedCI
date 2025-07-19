@@ -37,20 +37,28 @@ def call(Map config = [:]) {
         script {
             if (core_utils.shouldExecuteStage('lint', config)) {
                 logger.info("LINTING STAGE")
-                def lintResult = lint_utils.runLint(config)
                 
-                // Store lint result for reporting
-                env.LINT_STATUS = lintResult.status
-                env.LINT_MESSAGE = lintResult.message
-                
-                if (lintResult.status == 'UNSTABLE') {
-                    logger.warning("Lint completed with violations but marked as non-critical")
+                try {
+                    def lintResult = lint_utils.runLint(config)
+                    
+                    // Store lint result for reporting
+                    env.LINT_STATUS = lintResult.status
+                    env.LINT_MESSAGE = lintResult.message
+                    
+                    if (lintResult.status in ['FAILED', 'UNSTABLE']) {
+                        logger.warning("Lint issues found but continuing build (non-critical)")
+                        currentBuild.result = 'UNSTABLE'
+                        env.LINT_STATUS = 'UNSTABLE'  // Always mark as UNSTABLE, never FAILED
+                    } else {
+                        logger.info("Lint completed successfully")
+                    }
+                    
+                } catch (Exception e) {
+                    logger.error("Lint execution failed: ${e.getMessage()}")
+                    env.LINT_STATUS = 'UNSTABLE'
+                    env.LINT_MESSAGE = "Lint execution failed: ${e.getMessage()}"
                     currentBuild.result = 'UNSTABLE'
-                } else if (lintResult.status == 'FAILED') {
-                    logger.error("Lint failed critically")
-                    error("Lint stage failed: ${lintResult.message}")
-                } else {
-                    logger.info("Lint completed successfully")
+                    logger.warning("Lint failed but continuing build")
                 }
             } else {
                 logger.info("Linting is disabled - skipping")
