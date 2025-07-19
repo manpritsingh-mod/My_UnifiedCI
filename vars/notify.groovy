@@ -14,9 +14,9 @@ def notifyBuildStatus(String status, Map config = [:]) {
             timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
         ]
         
-        // Always send both email and slack notifications
+        // Send email notification (Slack disabled)
         sendEmailNotification(notificationData, config)
-        sendSlackNotification(notificationData, config)
+        // sendSlackNotification(notificationData, config)  // DISABLED
         
         // Always log to console
         logNotification(notificationData)
@@ -72,6 +72,7 @@ private def sendEmailNotification(Map notificationData, Map config) {
 }
 
 private def sendSlackNotification(Map notificationData, Map config) {
+    // SLACK NOTIFICATIONS CURRENTLY DISABLED
     def color = getStatusColor(notificationData.status)
     def message = getSlackMessage(notificationData)
     

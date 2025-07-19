@@ -25,8 +25,8 @@ def generateAndSendReports(Map config, Map stageResults = [:]) {
         // Send comprehensive report via email
         sendDetailedEmailReport(config, stageResults)
         
-        // Send summary to Slack
-        sendSlackSummaryReport(config, stageResults)
+        // Send summary to Slack (DISABLED)
+        // sendSlackSummaryReport(config, stageResults)
         
     } catch (Exception e) {
         logger.error("Failed to generate/send reports: ${e.getMessage()}")
@@ -249,6 +249,7 @@ def sendDetailedEmailReport(Map config, Map stageResults) {
 }
 
 def sendSlackSummaryReport(Map config, Map stageResults) {
+    // SLACK NOTIFICATIONS CURRENTLY DISABLED
     logger.info("Sending Slack summary report")
     
     try {
