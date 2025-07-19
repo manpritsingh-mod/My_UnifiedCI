@@ -35,7 +35,21 @@ def call(Map config = [:]) {
     stage('Lint') {
         script {
             logger.info("LINTING STAGE")
-            lint_utils.runLint(config)
+            def lintResult = lint_utils.runLint(config)
+            
+            // Store lint result for reporting
+            env.LINT_STATUS = lintResult.status
+            env.LINT_MESSAGE = lintResult.message
+            
+            if (lintResult.status == 'UNSTABLE') {
+                logger.warning("Lint completed with violations but marked as non-critical")
+                currentBuild.result = 'UNSTABLE'
+            } else if (lintResult.status == 'FAILED') {
+                logger.error("Lint failed critically")
+                error("Lint stage failed: ${lintResult.message}")
+            } else {
+                logger.info("Lint completed successfully")
+            }
         }
     }
     
@@ -53,10 +67,25 @@ def call(Map config = [:]) {
         }
     }
     
-    // Future: Add notification stage
-    // stage('Notify') {
-    //     script {
-    //         notify.sendReport(config)
-    //     }
-    // }
+    // Detailed Reporting and Notification Stage
+    stage('Generate Reports') {
+        script {
+            logger.info("GENERATING DETAILED REPORTS")
+            
+            // Collect all stage results
+            def stageResults = [
+                'Checkout': 'SUCCESS',
+                'Setup': 'SUCCESS',
+                'Install Dependencies': 'SUCCESS',
+                'Lint': env.LINT_STATUS ?: 'SUCCESS',
+                'Build': 'SUCCESS',
+                'Unit Test': 'SUCCESS'  // Will be enhanced later
+            ]
+            
+            // Generate and send detailed reports
+            sendReport.generateAndSendReports(config, stageResults)
+            
+            logger.info("Detailed reports generated and sent")
+        }
+    }
 }

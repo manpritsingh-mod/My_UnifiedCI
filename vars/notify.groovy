@@ -1,61 +1,46 @@
 /**
- * Notification utilities for Jenkins pipeline
- * Handles various notification types: email, slack, teams, etc.
+ * Basic Notification utilities for Jenkins pipeline
+ * Handles SUCCESS, FAILURE, and UNSTABLE build notifications
  */
 
 def notifyBuildStatus(String status, Map config = [:]) {
-    echo "Sending build notification: ${status}"
+    logger.info("Sending build notification: ${status}")
     
     try {
         def buildInfo = getBuildInfo()
         def notificationData = [
             status: status,
             buildInfo: buildInfo,
-            timestamp: new Date().format('yyyy-MM-dd HH:mm:ss'),
-            config: config
+            timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
         ]
         
-        // Send notifications based on configured channels
-        if (config.notifications?.email?.enabled) {
-            sendEmailNotification(notificationData)
-        }
-        
-        if (config.notifications?.slack?.enabled) {
-            sendSlackNotification(notificationData)
-        }
-        
-        if (config.notifications?.teams?.enabled) {
-            sendTeamsNotification(notificationData)
-        }
+        // Always send both email and slack notifications
+        sendEmailNotification(notificationData, config)
+        sendSlackNotification(notificationData, config)
         
         // Always log to console
         logNotification(notificationData)
         
     } catch (Exception e) {
-        echo "Failed to send notification: ${e.getMessage()}"
+        logger.error("Failed to send notification: ${e.getMessage()}")
     }
 }
 
-def notifyStageStatus(String stage, String status, Map stageResults = [:], Map config = [:]) {
-    echo "Sending stage notification: ${stage} - ${status}"
+// Determine overall build status based on stage results
+def determineBuildStatus(Map stageResults) {
+    if (!stageResults || stageResults.isEmpty()) {
+        return 'SUCCESS'
+    }
     
-    try {
-        def stageInfo = [
-            stage: stage,
-            status: status,
-            results: stageResults,
-            timestamp: new Date().format('yyyy-MM-dd HH:mm:ss'),
-            buildNumber: env.BUILD_NUMBER,
-            jobName: env.JOB_NAME
-        ]
-        
-        // Send stage-specific notifications
-        if (config.notifications?.stageUpdates?.enabled) {
-            sendStageUpdateNotification(stageInfo, config)
-        }
-        
-    } catch (Exception e) {
-        echo "Failed to send stage notification: ${e.getMessage()}"
+    def hasFailures = stageResults.values().any { it == 'FAILED' }
+    def hasUnstable = stageResults.values().any { it == 'UNSTABLE' }
+    
+    if (hasFailures) {
+        return 'FAILED'
+    } else if (hasUnstable) {
+        return 'UNSTABLE'
+    } else {
+        return 'SUCCESS'
     }
 }
 
@@ -64,178 +49,162 @@ private def getBuildInfo() {
         jobName: env.JOB_NAME ?: 'Unknown Job',
         buildNumber: env.BUILD_NUMBER ?: 'Unknown Build',
         buildUrl: env.BUILD_URL ?: 'Unknown URL',
-        gitCommit: env.GIT_COMMIT ?: 'Unknown Commit',
         gitBranch: env.GIT_BRANCH ?: 'Unknown Branch',
-        jenkinsUrl: env.JENKINS_URL ?: 'Unknown Jenkins URL',
         node: env.NODE_NAME ?: 'Unknown Node'
     ]
 }
 
-private def sendEmailNotification(Map notificationData) {
-    def subject = "Build ${notificationData.status}: ${notificationData.buildInfo.jobName} #${notificationData.buildInfo.buildNumber}"
-    def body = generateEmailBody(notificationData)
+private def sendEmailNotification(Map notificationData, Map config) {
+    def subject = getEmailSubject(notificationData.status, notificationData.buildInfo)
+    def body = getEmailBody(notificationData)
     
     try {
         emailext (
             subject: subject,
             body: body,
             mimeType: 'text/html',
-            to: notificationData.config.notifications.email.recipients ?: 'default@example.com'
+            to: config.notifications.email.recipients?.join(',') ?: 'team@company.com'
         )
-        echo "Email notification sent successfully"
+        logger.info("Email notification sent successfully")
     } catch (Exception e) {
-        echo "Failed to send email notification: ${e.getMessage()}"
+        logger.error("Failed to send email notification: ${e.getMessage()}")
     }
 }
 
-private def sendSlackNotification(Map notificationData) {
+private def sendSlackNotification(Map notificationData, Map config) {
     def color = getStatusColor(notificationData.status)
-    def message = generateSlackMessage(notificationData)
+    def message = getSlackMessage(notificationData)
     
     try {
         slackSend (
-            channel: notificationData.config.notifications.slack.channel ?: '#builds',
+            channel: config.notifications.slack.channel ?: '#builds',
             color: color,
             message: message
         )
-        echo "Slack notification sent successfully"
+        logger.info("Slack notification sent successfully")
     } catch (Exception e) {
-        echo "Failed to send Slack notification: ${e.getMessage()}"
+        logger.error("Failed to send Slack notification: ${e.getMessage()}")
     }
 }
 
-private def sendTeamsNotification(Map notificationData) {
-    def message = generateTeamsMessage(notificationData)
-    
-    try {
-        // office365ConnectorSend or custom Teams webhook implementation
-        echo "Teams notification would be sent: ${message}"
-    } catch (Exception e) {
-        echo "Failed to send Teams notification: ${e.getMessage()}"
-    }
-}
 
-private def sendStageUpdateNotification(Map stageInfo, Map config) {
-    def message = "Stage ${stageInfo.stage} completed with status: ${stageInfo.status}"
-    
-    if (stageInfo.results) {
-        message += "\nResults: ${stageInfo.results}"
-    }
-    
-    echo message
-}
 
 private def logNotification(Map notificationData) {
-    echo "=== BUILD NOTIFICATION ==="
-    echo "Status: ${notificationData.status}"
-    echo "Job: ${notificationData.buildInfo.jobName}"
-    echo "Build: #${notificationData.buildInfo.buildNumber}"
-    echo "Time: ${notificationData.timestamp}"
-    echo "URL: ${notificationData.buildInfo.buildUrl}"
-    echo "============================="
+    logger.info("=== BUILD NOTIFICATION ===")
+    logger.info("Status: ${notificationData.status}")
+    logger.info("Job: ${notificationData.buildInfo.jobName}")
+    logger.info("Build: #${notificationData.buildInfo.buildNumber}")
+    logger.info("Time: ${notificationData.timestamp}")
+    logger.info("URL: ${notificationData.buildInfo.buildUrl}")
+    logger.info("==========================")
 }
 
-private String generateEmailBody(Map notificationData) {
+// Message generators for different statuses
+private String getEmailSubject(String status, Map buildInfo) {
+    def emoji = getStatusEmoji(status)
+    return "${emoji} Build ${status}: ${buildInfo.jobName} #${buildInfo.buildNumber}"
+}
+
+private String getEmailBody(Map notificationData) {
+    def status = notificationData.status
+    def buildInfo = notificationData.buildInfo
+    
     return """
     <html>
     <body>
-        <h2>Build ${notificationData.status}</h2>
-        <table border="1" style="border-collapse: collapse;">
-            <tr><td><strong>Job Name:</strong></td><td>${notificationData.buildInfo.jobName}</td></tr>
-            <tr><td><strong>Build Number:</strong></td><td>${notificationData.buildInfo.buildNumber}</td></tr>
-            <tr><td><strong>Status:</strong></td><td>${notificationData.status}</td></tr>
-            <tr><td><strong>Timestamp:</strong></td><td>${notificationData.timestamp}</td></tr>
-            <tr><td><strong>Build URL:</strong></td><td><a href="${notificationData.buildInfo.buildUrl}">${notificationData.buildInfo.buildUrl}</a></td></tr>
-            <tr><td><strong>Git Branch:</strong></td><td>${notificationData.buildInfo.gitBranch}</td></tr>
-            <tr><td><strong>Git Commit:</strong></td><td>${notificationData.buildInfo.gitCommit}</td></tr>
+        <h2>${getStatusEmoji(status)} Build ${status}</h2>
+        <table border="1" style="border-collapse: collapse; margin: 10px 0;">
+            <tr><td><strong>Job Name:</strong></td><td>${buildInfo.jobName}</td></tr>
+            <tr><td><strong>Build Number:</strong></td><td>#${buildInfo.buildNumber}</td></tr>
+            <tr><td><strong>Status:</strong></td><td><span style="color: ${getStatusHtmlColor(status)}"><strong>${status}</strong></span></td></tr>
+            <tr><td><strong>Time:</strong></td><td>${notificationData.timestamp}</td></tr>
+            <tr><td><strong>Branch:</strong></td><td>${buildInfo.gitBranch}</td></tr>
+            <tr><td><strong>Build URL:</strong></td><td><a href="${buildInfo.buildUrl}">View Build</a></td></tr>
         </table>
+        
+        ${getStatusMessage(status)}
     </body>
     </html>
     """
 }
 
-private String generateSlackMessage(Map notificationData) {
-    return """
-    :jenkins: *Build ${notificationData.status}*
+private String getSlackMessage(Map notificationData) {
+    def status = notificationData.status
+    def buildInfo = notificationData.buildInfo
+    def emoji = getStatusEmoji(status)
     
-    *Job:* ${notificationData.buildInfo.jobName}
-    *Build:* #${notificationData.buildInfo.buildNumber}
-    *Branch:* ${notificationData.buildInfo.gitBranch}
-    *Time:* ${notificationData.timestamp}
-    
-    <${notificationData.buildInfo.buildUrl}|View Build>
-    """
+    return """${emoji} *Build ${status}*
+
+*Job:* ${buildInfo.jobName}
+*Build:* #${buildInfo.buildNumber}
+*Branch:* ${buildInfo.gitBranch}
+*Time:* ${notificationData.timestamp}
+
+<${buildInfo.buildUrl}|View Build>
+
+${getStatusMessage(status)}"""
 }
 
-private String generateTeamsMessage(Map notificationData) {
-    return """
-    **Build ${notificationData.status}**
-    
-    - **Job:** ${notificationData.buildInfo.jobName}
-    - **Build:** #${notificationData.buildInfo.buildNumber}
-    - **Branch:** ${notificationData.buildInfo.gitBranch}
-    - **Time:** ${notificationData.timestamp}
-    
-    [View Build](${notificationData.buildInfo.buildUrl})
-    """
+
+
+// Status-specific helpers
+private String getStatusEmoji(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS':
+            return '✅'
+        case 'FAILED':
+        case 'FAILURE':
+            return '❌'
+        case 'UNSTABLE':
+            return '⚠️'
+        case 'ABORTED':
+            return '🛑'
+        default:
+            return 'ℹ️'
+    }
 }
 
 private String getStatusColor(String status) {
-    switch(status.toLowerCase()) {
-        case 'success':
+    switch(status.toUpperCase()) {
+        case 'SUCCESS':
             return 'good'
-        case 'failure':
-        case 'failed':
+        case 'FAILED':
+        case 'FAILURE':
             return 'danger'
-        case 'unstable':
+        case 'UNSTABLE':
             return 'warning'
         default:
             return '#439FE0'
     }
 }
 
-def notifyOnFailure(String stage, Exception error, Map config = [:]) {
-    echo "Sending failure notification for stage: ${stage}"
-    
-    def failureData = [
-        stage: stage,
-        error: error.getMessage(),
-        timestamp: new Date().format('yyyy-MM-dd HH:mm:ss'),
-        buildInfo: getBuildInfo()
-    ]
-    
-    // Send immediate failure notification
-    if (config.notifications?.immediateFailure?.enabled) {
-        sendFailureNotification(failureData, config)
+private String getStatusHtmlColor(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS':
+            return 'green'
+        case 'FAILED':
+        case 'FAILURE':
+            return 'red'
+        case 'UNSTABLE':
+            return 'orange'
+        default:
+            return 'blue'
     }
 }
 
-private def sendFailureNotification(Map failureData, Map config) {
-    def subject = "❌ Build Failed: ${failureData.stage} - ${failureData.buildInfo.jobName}"
-    def message = """
-    Build failed in stage: ${failureData.stage}
-    
-    Error: ${failureData.error}
-    Job: ${failureData.buildInfo.jobName}
-    Build: #${failureData.buildInfo.buildNumber}
-    Time: ${failureData.timestamp}
-    
-    Build URL: ${failureData.buildInfo.buildUrl}
-    """
-    
-    echo message
-    
-    // Send to configured channels
-    if (config.notifications?.email?.enabled) {
-        try {
-            emailext (
-                subject: subject,
-                body: message,
-                to: config.notifications.email.recipients ?: 'default@example.com'
-            )
-        } catch (Exception e) {
-            echo "Failed to send failure email: ${e.getMessage()}"
-        }
+private String getStatusMessage(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS':
+            return 'All stages completed successfully! 🎉'
+        case 'FAILED':
+        case 'FAILURE':
+            return 'Build failed. Please check the logs and fix the issues.'
+        case 'UNSTABLE':
+            return 'Build completed with warnings. Some tests may have failed or quality gates not met.'
+        case 'ABORTED':
+            return 'Build was manually aborted or timed out.'
+        default:
+            return 'Build completed with unknown status.'
     }
 }
 

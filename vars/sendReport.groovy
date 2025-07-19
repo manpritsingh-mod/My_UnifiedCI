@@ -1,701 +1,519 @@
 /**
- * Report generation and sending utilities for Jenkins pipeline
- * Focused on Slack notifications and comprehensive report generation
+ * Report generation and sending utilities
+ * Handles Allure reports, lint reports, and detailed notifications
  */
 
-def generateAndSendReport(Map buildResults = [:], Map config = [:]) {
-    echo "Generating comprehensive build report"
+def generateAndSendReports(Map config, Map stageResults = [:]) {
+    logger.info("Generating and sending comprehensive reports")
     
     try {
-        def reportData = collectReportData(buildResults, config)
-        def report = generateReport(reportData)
-        
-        // Save report to workspace
-        saveReportToWorkspace(report, reportData)
-        
-        // Send report via Slack
-        sendSlackReport(report, reportData, config)
-        
-        // Send email report if configured
-        if (config.reporting?.email?.enabled) {
-            sendEmailReport(report, reportData, config)
+        // Generate Allure report if enabled
+        if (config.reports?.allure?.enabled) {
+            generateAllureReport(config)
         }
         
-        echo "Report generation and sending completed"
+        // Generate detailed lint report
+        if (config.reports?.lint?.enabled && env.LINT_STATUS) {
+            generateDetailedLintReport(config)
+        }
+        
+        // Generate detailed test report
+        if (config.reports?.allure?.enabled && env.TEST_STATUS) {
+            generateDetailedTestReport(config)
+        }
+        
+        // Send comprehensive report via email
+        sendDetailedEmailReport(config, stageResults)
+        
+        // Send summary to Slack
+        sendSlackSummaryReport(config, stageResults)
         
     } catch (Exception e) {
-        echo "Failed to generate and send report: ${e.getMessage()}"
-        e.printStackTrace()
+        logger.error("Failed to generate/send reports: ${e.getMessage()}")
     }
 }
 
-def collectTestResults(String language, String testTool) {
-    echo "Collecting test results for ${language} using ${testTool}"
-    
-    def testResults = [:]
+def generateAllureReport(Map config) {
+    logger.info("Generating Allure report")
     
     try {
-        // Collect JUnit test results for Maven
-        if (fileExists('target/surefire-reports/TEST-*.xml')) {
-            testResults = parseJUnitResults('target/surefire-reports/')
-        } 
-        // Collect JUnit test results for Gradle
-        else if (fileExists('build/test-results/test/TEST-*.xml')) {
-            testResults = parseJUnitResults('build/test-results/test/')
-        }
-        // Handle Python test results
-        else if (fileExists('test-results.xml')) {
-            testResults = parseJUnitResults('.')
-        }
-        else {
-            echo "No test result files found"
-            testResults = [totalTests: 0, passed: 0, failed: 0, skipped: 0, successRate: 0]
+        // Check if allure results exist
+        if (!fileExists('allure-results')) {
+            logger.warning("No allure-results directory found, creating empty one")
+            bat 'mkdir allure-results'
         }
         
-        // Collect coverage results if available
-        if (fileExists('target/site/jacoco/jacoco.xml')) {
-            testResults.coverage = parseJacocoResults('target/site/jacoco/jacoco.xml')
-        }
+        // Generate Allure report
+        allure([
+            includeProperties: false,
+            jdk: '',
+            properties: [],
+            reportBuildPolicy: 'ALWAYS',
+            results: [[path: config.reports?.allure?.results_path ?: 'allure-results']]
+        ])
         
-        echo "Test results collected: ${testResults}"
+        // Archive the report
+        publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: true,
+            keepAll: true,
+            reportDir: config.reports?.allure?.report_path ?: 'allure-report',
+            reportFiles: 'index.html',
+            reportName: 'Allure Report',
+            reportTitles: ''
+        ])
+        
+        logger.info("Allure report generated successfully")
         
     } catch (Exception e) {
-        echo "Failed to collect test results: ${e.getMessage()}"
-        testResults = [error: e.getMessage(), totalTests: 0, passed: 0, failed: 0, skipped: 0, successRate: 0]
+        logger.error("Failed to generate Allure report: ${e.getMessage()}")
     }
-    
-    return testResults
 }
 
-def collectLintResults(String language, String lintTool) {
-    echo "Collecting lint results for ${language} using ${lintTool}"
-    
-    def lintResults = [:]
+def generateDetailedLintReport(Map config) {
+    logger.info("Generating detailed lint report")
     
     try {
-        // Collect Checkstyle results for Maven
-        if (fileExists('target/checkstyle-result.xml')) {
-            lintResults = parseCheckstyleResults('target/checkstyle-result.xml')
-        } 
-        // Collect Checkstyle results for Gradle
-        else if (fileExists('build/reports/checkstyle/main.xml')) {
-            lintResults = parseCheckstyleResults('build/reports/checkstyle/main.xml')
-        }
-        // Handle Python lint results
-        else if (fileExists('pylint-report.txt')) {
-            lintResults = parsePylintResults('pylint-report.txt')
-        }
-        else {
-            echo "No lint result files found"
-            lintResults = [totalIssues: 0, errors: 0, warnings: 0, info: 0]
-        }
+        def lintStatus = env.LINT_STATUS
+        def lintMessage = env.LINT_MESSAGE
         
-        echo "Lint results collected: ${lintResults}"
+        if (lintStatus in ['FAILED', 'UNSTABLE']) {
+            // Create detailed lint report HTML
+            def reportHtml = generateLintReportHtml(config)
+            
+            // Write report to file
+            writeFile file: 'lint-report.html', text: reportHtml
+            
+            // Archive the report
+            archiveArtifacts artifacts: 'lint-report.html', allowEmptyArchive: true
+            
+            // Publish HTML report
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: '.',
+                reportFiles: 'lint-report.html',
+                reportName: 'Lint Report',
+                reportTitles: ''
+            ])
+            
+            logger.info("Detailed lint report generated")
+        }
         
     } catch (Exception e) {
-        echo "Failed to collect lint results: ${e.getMessage()}"
-        lintResults = [error: e.getMessage(), totalIssues: 0, errors: 0, warnings: 0, info: 0]
+        logger.error("Failed to generate detailed lint report: ${e.getMessage()}")
     }
-    
-    return lintResults
 }
 
-def collectBuildMetrics(Map buildResults) {
-    echo "Collecting build metrics"
-    
-    def metrics = [:]
+def generateDetailedTestReport(Map config) {
+    logger.info("Generating detailed test report")
     
     try {
-        // Build duration
-        metrics.buildDuration = getBuildDuration()
+        def testStatus = env.TEST_STATUS
+        def testMessage = env.TEST_MESSAGE
+        def testDetails = env.TEST_DETAILS
         
-        // Build status
-        metrics.buildStatus = currentBuild.result ?: 'SUCCESS'
-        
-        // Stage durations
-        metrics.stageDurations = buildResults.stageDurations ?: [:]
-        
-        // Environment information
-        metrics.environment = collectEnvironmentInfo()
-        
-        echo "Build metrics collected: ${metrics}"
+        if (testStatus in ['FAILED', 'UNSTABLE']) {
+            // Create detailed test report HTML
+            def reportHtml = generateTestReportHtml(config)
+            
+            // Write report to file
+            writeFile file: 'test-report.html', text: reportHtml
+            
+            // Archive the report
+            archiveArtifacts artifacts: 'test-report.html', allowEmptyArchive: true
+            
+            // Publish HTML report
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: '.',
+                reportFiles: 'test-report.html',
+                reportName: 'Test Report',
+                reportTitles: ''
+            ])
+            
+            logger.info("Detailed test report generated")
+        }
         
     } catch (Exception e) {
-        echo "Failed to collect build metrics: ${e.getMessage()}"
-        metrics = [error: e.getMessage(), buildDuration: 'N/A', buildStatus: 'UNKNOWN']
+        logger.error("Failed to generate detailed test report: ${e.getMessage()}")
     }
-    
-    return metrics
 }
 
-private def collectReportData(Map buildResults, Map config) {
-    def reportData = [:]
-    
-    // Basic build information
-    reportData.buildInfo = [
-        jobName: env.JOB_NAME ?: 'Unknown Job',
-        buildNumber: env.BUILD_NUMBER ?: 'Unknown Build',
-        buildUrl: env.BUILD_URL ?: 'Unknown URL',
-        gitCommit: env.GIT_COMMIT ?: 'Unknown Commit',
-        gitBranch: env.GIT_BRANCH ?: 'Unknown Branch',
-        timestamp: new Date().format('yyyy-MM-dd HH:mm:ss'),
-        duration: getBuildDuration()
+private String generateLintReportHtml(Map config) {
+    def lintStatus = env.LINT_STATUS
+    def buildInfo = [
+        jobName: env.JOB_NAME,
+        buildNumber: env.BUILD_NUMBER,
+        buildUrl: env.BUILD_URL,
+        timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
     ]
     
-    // Stage results
-    reportData.stageResults = buildResults.stageResults ?: [:]
-    
-    // Test results
-    reportData.testResults = buildResults.testResults ?: [:]
-    
-    // Lint results
-    reportData.lintResults = buildResults.lintResults ?: [:]
-    
-    // Build metrics
-    reportData.buildMetrics = collectBuildMetrics(buildResults)
-    
-    // Configuration used
-    reportData.config = config
-    
-    return reportData
-}
-
-private def generateReport(Map reportData) {
-    echo "Generating reports"
-    
-    def htmlReport = generateHTMLReport(reportData)
-    def jsonReport = generateJSONReport(reportData)
-    def textReport = generateTextReport(reportData)
-    
-    return [
-        html: htmlReport,
-        json: jsonReport,
-        text: textReport
-    ]
-}
-
-private String generateHTMLReport(Map reportData) {
-    def statusColor = getStatusColor(reportData.buildMetrics.buildStatus)
+    def statusColor = lintStatus == 'FAILED' ? 'red' : 'orange'
+    def statusIcon = lintStatus == 'FAILED' ? '❌' : '⚠️'
     
     return """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Build Report - ${reportData.buildInfo.jobName} #${reportData.buildInfo.buildNumber}</title>
+        <title>Lint Report - ${buildInfo.jobName} #${buildInfo.buildNumber}</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-            .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .header { background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-            .section { margin: 20px 0; padding: 15px; border-radius: 5px; background-color: #f8f9fa; }
-            .success { color: #28a745; font-weight: bold; }
-            .failure { color: #dc3545; font-weight: bold; }
-            .warning { color: #ffc107; font-weight: bold; }
-            .info { color: #17a2b8; font-weight: bold; }
-            table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-            th { background-color: #e9ecef; font-weight: bold; }
-            .summary-box { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #007bff; }
-            .error-box { background-color: #f8d7da; padding: 20px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #dc3545; }
-            .success-box { background-color: #d4edda; padding: 20px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #28a745; }
-            .status-badge { padding: 5px 10px; border-radius: 15px; color: white; font-weight: bold; }
-            .status-success { background-color: #28a745; }
-            .status-failure { background-color: #dc3545; }
-            .status-warning { background-color: #ffc107; color: #212529; }
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { background-color: #f5f5f5; padding: 15px; border-radius: 5px; }
+            .status { color: ${statusColor}; font-weight: bold; font-size: 18px; }
+            .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+            .violation { background-color: #fff3cd; padding: 10px; margin: 5px 0; border-radius: 3px; }
+            .file-path { font-weight: bold; color: #0066cc; }
+            .line-number { color: #666; }
+            .message { color: #721c24; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>🚀 Build Report</h1>
-                <h2>${reportData.buildInfo.jobName} #${reportData.buildInfo.buildNumber}</h2>
-                <p><strong>Status:</strong> <span class="status-badge ${getStatusBadgeClass(reportData.buildMetrics.buildStatus)}">${reportData.buildMetrics.buildStatus}</span></p>
-                <p><strong>Branch:</strong> ${reportData.buildInfo.gitBranch}</p>
-                <p><strong>Commit:</strong> ${reportData.buildInfo.gitCommit}</p>
-                <p><strong>Duration:</strong> ${reportData.buildInfo.duration}</p>
-                <p><strong>Timestamp:</strong> ${reportData.buildInfo.timestamp}</p>
-            </div>
-            
-            <div class="section">
-                <h3>📊 Stage Results</h3>
-                <table>
-                    <tr>
-                        <th>Stage</th>
-                        <th>Status</th>
-                        <th>Duration</th>
-                        <th>Details</th>
-                    </tr>
-                    ${generateStageResultsTable(reportData.stageResults)}
-                </table>
-            </div>
-            
-            <div class="section">
-                <h3>🧪 Test Results</h3>
-                ${generateTestResultsSection(reportData.testResults)}
-            </div>
-            
-            <div class="section">
-                <h3>🔍 Lint Results</h3>
-                ${generateLintResultsSection(reportData.lintResults)}
-            </div>
-            
-            <div class="section">
-                <h3>📈 Build Metrics</h3>
-                ${generateBuildMetricsSection(reportData.buildMetrics)}
-            </div>
-            
-            <div class="section">
-                <h3>🔧 Environment Information</h3>
-                <table>
-                    <tr><th>Property</th><th>Value</th></tr>
-                    <tr><td>Jenkins URL</td><td>${env.JENKINS_URL ?: 'N/A'}</td></tr>
-                    <tr><td>Node</td><td>${env.NODE_NAME ?: 'N/A'}</td></tr>
-                    <tr><td>Workspace</td><td>${env.WORKSPACE ?: 'N/A'}</td></tr>
-                    <tr><td>Java Version</td><td>${reportData.buildMetrics.environment?.javaVersion ?: 'Unknown'}</td></tr>
-                </table>
-            </div>
-            
-            <footer style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px;">
-                <p><em>📄 Report generated at ${new Date().format('yyyy-MM-dd HH:mm:ss')}</em></p>
-                <p><a href="${reportData.buildInfo.buildUrl}" style="color: #007bff; text-decoration: none;">🔗 View in Jenkins</a></p>
-            </footer>
+        <div class="header">
+            <h1>${statusIcon} Lint Report</h1>
+            <div class="status">Status: ${lintStatus}</div>
+            <table>
+                <tr><td><strong>Job:</strong></td><td>${buildInfo.jobName}</td></tr>
+                <tr><td><strong>Build:</strong></td><td>#${buildInfo.buildNumber}</td></tr>
+                <tr><td><strong>Time:</strong></td><td>${buildInfo.timestamp}</td></tr>
+                <tr><td><strong>Build URL:</strong></td><td><a href="${buildInfo.buildUrl}">View Build</a></td></tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Summary</h2>
+            <p><strong>Message:</strong> ${env.LINT_MESSAGE ?: 'Lint check completed'}</p>
+            <p><strong>Tool:</strong> ${config.tool_for_lint_testing?.java ?: 'checkstyle'}</p>
+        </div>
+        
+        <div class="section">
+            <h2>Checkstyle Results</h2>
+            <p>Detailed checkstyle violations can be found in the archived artifacts.</p>
+            <p><a href="${buildInfo.buildUrl}artifact/target/checkstyle-result.xml">Download Checkstyle XML Report</a></p>
+        </div>
+        
+        <div class="section">
+            <h2>Next Steps</h2>
+            <ul>
+                <li>Review the checkstyle violations above</li>
+                <li>Fix the code style issues</li>
+                <li>Run the build again to verify fixes</li>
+                <li>Consider updating checkstyle rules if needed</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>Build Information</h2>
+            <p>This report was generated automatically by the CI/CD pipeline.</p>
+            <p>For questions, contact the development team.</p>
         </div>
     </body>
     </html>
     """
 }
 
-private String generateJSONReport(Map reportData) {
-    echo "Generating JSON report"
-    
-    def jsonBuilder = new groovy.json.JsonBuilder(reportData)
-    return jsonBuilder.toPrettyString()
-}
-
-private String generateTextReport(Map reportData) {
-    return """
-    ===============================================
-    🚀 BUILD REPORT
-    ===============================================
-    
-    Job: ${reportData.buildInfo.jobName}
-    Build: #${reportData.buildInfo.buildNumber}
-    Status: ${reportData.buildMetrics.buildStatus}
-    Branch: ${reportData.buildInfo.gitBranch}
-    Commit: ${reportData.buildInfo.gitCommit}
-    Duration: ${reportData.buildInfo.duration}
-    Timestamp: ${reportData.buildInfo.timestamp}
-    
-    ===============================================
-    📊 STAGE RESULTS
-    ===============================================
-    ${generateStageResultsText(reportData.stageResults)}
-    
-    ===============================================
-    🧪 TEST RESULTS
-    ===============================================
-    ${generateTestResultsText(reportData.testResults)}
-    
-    ===============================================
-    🔍 LINT RESULTS
-    ===============================================
-    ${generateLintResultsText(reportData.lintResults)}
-    
-    ===============================================
-    📈 BUILD METRICS
-    ===============================================
-    ${generateBuildMetricsText(reportData.buildMetrics)}
-    
-    ===============================================
-    """
-}
-
-private def saveReportToWorkspace(Map report, Map reportData) {
-    echo "Saving reports to workspace"
+def sendDetailedEmailReport(Map config, Map stageResults) {
+    logger.info("Sending detailed email report")
     
     try {
-        // Save HTML report
-        writeFile file: 'build-report.html', text: report.html
+        def buildInfo = [
+            jobName: env.JOB_NAME,
+            buildNumber: env.BUILD_NUMBER,
+            buildUrl: env.BUILD_URL,
+            timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
+        ]
         
-        // Save JSON report
-        writeFile file: 'build-report.json', text: report.json
+        def overallStatus = notify.determineBuildStatus(stageResults)
+        def subject = getDetailedEmailSubject(overallStatus, buildInfo)
+        def body = getDetailedEmailBody(overallStatus, buildInfo, stageResults, config)
         
-        // Save text report
-        writeFile file: 'build-report.txt', text: report.text
-        
-        echo "Reports saved to workspace"
-        
-    } catch (Exception e) {
-        echo "Failed to save reports: ${e.getMessage()}"
-    }
-}
-
-private def sendSlackReport(Map report, Map reportData, Map config) {
-    echo "Sending Slack report"
-    
-    try {
-        def slackChannel = config.reporting?.slack?.channel ?: '#builds'
-        def slackColor = getSlackColor(reportData.buildMetrics.buildStatus)
-        def slackMessage = generateSlackMessage(reportData)
-        
-        // Send main report message
-        slackSend (
-            channel: slackChannel,
-            color: slackColor,
-            message: slackMessage
-        )
-        
-        // Send detailed results if there are failures
-        if (reportData.buildMetrics.buildStatus != 'SUCCESS') {
-            def detailedMessage = generateDetailedSlackMessage(reportData)
-            slackSend (
-                channel: slackChannel,
-                color: slackColor,
-                message: detailedMessage
-            )
-        }
-        
-        echo "Slack report sent successfully to ${slackChannel}"
-        
-    } catch (Exception e) {
-        echo "Failed to send Slack report: ${e.getMessage()}"
-    }
-}
-
-private def sendEmailReport(Map report, Map reportData, Map config) {
-    def subject = "Build Report: ${reportData.buildInfo.jobName} #${reportData.buildInfo.buildNumber} - ${reportData.buildMetrics.buildStatus}"
-    
-    try {
         emailext (
             subject: subject,
-            body: report.html,
+            body: body,
             mimeType: 'text/html',
-            to: config.reporting.email.recipients ?: 'default@example.com',
-            attachmentsPattern: 'build-report.*'
+            to: config.notifications?.email?.recipients?.join(',') ?: 'team@company.com',
+            attachmentsPattern: 'lint-report.html,target/checkstyle-result.xml'
         )
-        echo "Email report sent successfully"
+        
+        logger.info("Detailed email report sent successfully")
+        
     } catch (Exception e) {
-        echo "Failed to send email report: ${e.getMessage()}"
+        logger.error("Failed to send detailed email report: ${e.getMessage()}")
     }
 }
 
-// Helper methods for parsing results
-private def parseJUnitResults(String resultPath) {
-    def results = [totalTests: 0, passed: 0, failed: 0, skipped: 0, successRate: 0]
+def sendSlackSummaryReport(Map config, Map stageResults) {
+    logger.info("Sending Slack summary report")
     
     try {
-        // This is a simplified parser - in practice, you'd parse XML files
-        echo "Parsing JUnit results from: ${resultPath}"
+        def overallStatus = notify.determineBuildStatus(stageResults)
+        def message = getSlackSummaryMessage(overallStatus, stageResults)
+        def color = getSlackColor(overallStatus)
         
-        // Mock parsing logic - replace with actual XML parsing
-        if (fileExists("${resultPath}/TEST-com.example.javamavenjunithelloworld.HelloTest.xml")) {
-            results = [totalTests: 5, passed: 4, failed: 1, skipped: 0]
-            results.successRate = Math.round((results.passed / results.totalTests) * 100)
-        }
+        slackSend (
+            channel: config.notifications?.slack?.channel ?: '#builds',
+            color: color,
+            message: message
+        )
         
-    } catch (Exception e) {
-        echo "Failed to parse JUnit results: ${e.getMessage()}"
-    }
-    
-    return results
-}
-
-private def parseCheckstyleResults(String filePath) {
-    def results = [totalIssues: 0, errors: 0, warnings: 0, info: 0]
-    
-    try {
-        echo "Parsing Checkstyle results from: ${filePath}"
-        
-        // Mock parsing logic - replace with actual XML parsing
-        if (fileExists(filePath)) {
-            results = [totalIssues: 26, errors: 15, warnings: 10, info: 1]
-        }
+        logger.info("Slack summary report sent successfully")
         
     } catch (Exception e) {
-        echo "Failed to parse Checkstyle results: ${e.getMessage()}"
+        logger.error("Failed to send Slack summary report: ${e.getMessage()}")
     }
-    
-    return results
 }
 
-private def parsePylintResults(String filePath) {
-    def results = [totalIssues: 0, errors: 0, warnings: 0, info: 0]
-    
-    try {
-        echo "Parsing Pylint results from: ${filePath}"
-        
-        // Mock parsing logic - replace with actual file parsing
-        if (fileExists(filePath)) {
-            results = [totalIssues: 10, errors: 2, warnings: 6, info: 2]
-        }
-        
-    } catch (Exception e) {
-        echo "Failed to parse Pylint results: ${e.getMessage()}"
-    }
-    
-    return results
+private String getDetailedEmailSubject(String status, Map buildInfo) {
+    def emoji = status == 'SUCCESS' ? '✅' : (status == 'UNSTABLE' ? '⚠️' : '❌')
+    return "${emoji} Build Report: ${buildInfo.jobName} #${buildInfo.buildNumber} - ${status}"
 }
 
-private def parseJacocoResults(String filePath) {
-    def results = [lineCoverage: 0, branchCoverage: 0]
-    
-    try {
-        echo "Parsing Jacoco results from: ${filePath}"
-        
-        // Mock parsing logic - replace with actual XML parsing
-        if (fileExists(filePath)) {
-            results = [lineCoverage: 75, branchCoverage: 65]
-        }
-        
-    } catch (Exception e) {
-        echo "Failed to parse Jacoco results: ${e.getMessage()}"
-    }
-    
-    return results
-}
-
-// Helper methods for generating report sections
-private String generateStageResultsTable(Map stageResults) {
-    if (!stageResults || stageResults.isEmpty()) {
-        return "<tr><td colspan='4'>No stage results available</td></tr>"
-    }
-    
-    def rows = ""
-    stageResults.each { stage, result ->
-        def statusClass = result.success ? 'success' : 'failure'
-        def statusIcon = result.success ? '✅' : '❌'
-        rows += "<tr><td>${stage}</td><td class='${statusClass}'>${statusIcon} ${result.success ? 'SUCCESS' : 'FAILURE'}</td><td>${result.duration ?: 'N/A'}</td><td>${result.details ?: 'N/A'}</td></tr>"
-    }
-    return rows
-}
-
-private String generateTestResultsSection(Map testResults) {
-    if (!testResults || testResults.isEmpty()) {
-        return "<div class='summary-box'>No test results available</div>"
-    }
-    
-    def successRate = testResults.successRate ?: 0
-    def boxClass = successRate >= 80 ? 'success-box' : 'error-box'
-    def icon = successRate >= 80 ? '✅' : '❌'
-    
-    def coverageSection = ""
-    if (testResults.coverage) {
-        coverageSection = """
-        <h4>📊 Coverage Results</h4>
-        <p><strong>Line Coverage:</strong> ${testResults.coverage.lineCoverage}%</p>
-        <p><strong>Branch Coverage:</strong> ${testResults.coverage.branchCoverage}%</p>
-        """
-    }
-    
-    return """
-    <div class='${boxClass}'>
-        <h4>${icon} Test Summary</h4>
-        <p><strong>Total Tests:</strong> ${testResults.totalTests ?: 0}</p>
-        <p><strong>Passed:</strong> <span class='success'>${testResults.passed ?: 0}</span></p>
-        <p><strong>Failed:</strong> <span class='failure'>${testResults.failed ?: 0}</span></p>
-        <p><strong>Skipped:</strong> <span class='warning'>${testResults.skipped ?: 0}</span></p>
-        <p><strong>Success Rate:</strong> ${successRate}%</p>
-        ${coverageSection}
-    </div>
-    """
-}
-
-private String generateLintResultsSection(Map lintResults) {
-    if (!lintResults || lintResults.isEmpty()) {
-        return "<div class='summary-box'>No lint results available</div>"
-    }
-    
-    def boxClass = lintResults.errors > 0 ? 'error-box' : 'success-box'
-    def icon = lintResults.errors > 0 ? '❌' : '✅'
-    
-    return """
-    <div class='${boxClass}'>
-        <h4>${icon} Lint Summary</h4>
-        <p><strong>Total Issues:</strong> ${lintResults.totalIssues ?: 0}</p>
-        <p><strong>Errors:</strong> <span class='failure'>${lintResults.errors ?: 0}</span></p>
-        <p><strong>Warnings:</strong> <span class='warning'>${lintResults.warnings ?: 0}</span></p>
-        <p><strong>Info:</strong> <span class='info'>${lintResults.info ?: 0}</span></p>
-    </div>
-    """
-}
-
-private String generateBuildMetricsSection(Map buildMetrics) {
-    def statusIcon = buildMetrics.buildStatus == 'SUCCESS' ? '✅' : '❌'
-    
-    return """
-    <div class='summary-box'>
-        <h4>${statusIcon} Build Metrics</h4>
-        <p><strong>Build Status:</strong> <span class='${getStatusClass(buildMetrics.buildStatus)}'>${buildMetrics.buildStatus}</span></p>
-        <p><strong>Build Duration:</strong> ${buildMetrics.buildDuration ?: 'N/A'}</p>
-        <p><strong>Environment:</strong> ${buildMetrics.environment?.javaVersion ?: 'N/A'}</p>
-    </div>
-    """
-}
-
-// Helper methods for text report generation
-private String generateStageResultsText(Map stageResults) {
-    if (!stageResults || stageResults.isEmpty()) {
-        return "No stage results available"
-    }
-    
-    def text = ""
-    stageResults.each { stage, result ->
-        def icon = result.success ? '✅' : '❌'
-        text += "${icon} ${stage}: ${result.success ? 'SUCCESS' : 'FAILURE'} (${result.duration ?: 'N/A'})\n"
-        if (result.details) {
-            text += "  Details: ${result.details}\n"
-        }
-    }
-    return text
-}
-
-private String generateTestResultsText(Map testResults) {
-    if (!testResults || testResults.isEmpty()) {
-        return "No test results available"
-    }
-    
-    def icon = (testResults.successRate ?: 0) >= 80 ? '✅' : '❌'
-    
-    return """
-    ${icon} Total Tests: ${testResults.totalTests ?: 0}
-    ✅ Passed: ${testResults.passed ?: 0}
-    ❌ Failed: ${testResults.failed ?: 0}
-    ⚠️ Skipped: ${testResults.skipped ?: 0}
-    📊 Success Rate: ${testResults.successRate ?: 0}%
-    """
-}
-
-private String generateLintResultsText(Map lintResults) {
-    if (!lintResults || lintResults.isEmpty()) {
-        return "No lint results available"
-    }
-    
-    def icon = (lintResults.errors ?: 0) > 0 ? '❌' : '✅'
-    
-    return """
-    ${icon} Total Issues: ${lintResults.totalIssues ?: 0}
-    ❌ Errors: ${lintResults.errors ?: 0}
-    ⚠️ Warnings: ${lintResults.warnings ?: 0}
-    ℹ️ Info: ${lintResults.info ?: 0}
-    """
-}
-
-private String generateBuildMetricsText(Map buildMetrics) {
-    def icon = buildMetrics.buildStatus == 'SUCCESS' ? '✅' : '❌'
-    
-    return """
-    ${icon} Build Status: ${buildMetrics.buildStatus}
-    ⏱️ Build Duration: ${buildMetrics.buildDuration ?: 'N/A'}
-    🔧 Environment: ${buildMetrics.environment?.javaVersion ?: 'N/A'}
-    """
-}
-
-private String generateSlackMessage(Map reportData) {
-    def status = reportData.buildMetrics.buildStatus
-    def emoji = status == 'SUCCESS' ? ':white_check_mark:' : ':x:'
-    def testEmoji = (reportData.testResults?.successRate ?: 0) >= 80 ? ':white_check_mark:' : ':x:'
-    def lintEmoji = (reportData.lintResults?.errors ?: 0) == 0 ? ':white_check_mark:' : ':x:'
-    
-    return """
-    ${emoji} *Build Report: ${reportData.buildInfo.jobName} #${reportData.buildInfo.buildNumber}*
-    
-    *Status:* ${status}
-    *Duration:* ${reportData.buildInfo.duration}
-    *Branch:* ${reportData.buildInfo.gitBranch}
-    *Commit:* ${reportData.buildInfo.gitCommit?.take(8)}
-    
-    ${testEmoji} *Test Results:*
-    • Total: ${reportData.testResults?.totalTests ?: 0}
-    • Passed: ${reportData.testResults?.passed ?: 0}
-    • Failed: ${reportData.testResults?.failed ?: 0}
-    • Success Rate: ${reportData.testResults?.successRate ?: 0}%
-    
-    ${lintEmoji} *Lint Results:*
-    • Total Issues: ${reportData.lintResults?.totalIssues ?: 0}
-    • Errors: ${reportData.lintResults?.errors ?: 0}
-    • Warnings: ${reportData.lintResults?.warnings ?: 0}
-    
-    <${reportData.buildInfo.buildUrl}|:jenkins: View Build> | <${reportData.buildInfo.buildUrl}artifact/build-report.html|:page_facing_up: View Report>
-    """
-}
-
-private String generateDetailedSlackMessage(Map reportData) {
-    def failedStages = reportData.stageResults?.findAll { stage, result -> !result.success }
-    
-    if (!failedStages || failedStages.isEmpty()) {
-        return ":warning: *Build completed with issues but no specific stage failures recorded*"
-    }
-    
-    def failureDetails = ""
-    failedStages.each { stage, result ->
-        failureDetails += "• *${stage}:* ${result.details ?: 'No details available'}\n"
-    }
-    
-    return """
-    :warning: *Failed Stage Details:*
-    
-    ${failureDetails}
-    
-    :point_right: Check the full build log for more details: <${reportData.buildInfo.buildUrl}console|Console Output>
-    """
-}
-
-// Utility methods
-private String getBuildDuration() {
-    def duration = currentBuild.duration
-    if (duration) {
-        def minutes = Math.floor(duration / 60000)
-        def seconds = Math.floor((duration % 60000) / 1000)
-        return "${minutes}m ${seconds}s"
-    }
-    return "N/A"
-}
-
-private def collectEnvironmentInfo() {
-    return [
-        javaVersion: env.JAVA_VERSION ?: 'Unknown',
-        mavenVersion: env.MAVEN_VERSION ?: 'Unknown',
-        nodeVersion: env.NODE_VERSION ?: 'Unknown',
-        jenkinsVersion: env.JENKINS_VERSION ?: 'Unknown'
+private String generateTestReportHtml(Map config) {
+    def testStatus = env.TEST_STATUS
+    def testMessage = env.TEST_MESSAGE
+    def testDetails = env.TEST_DETAILS
+    def buildInfo = [
+        jobName: env.JOB_NAME,
+        buildNumber: env.BUILD_NUMBER,
+        buildUrl: env.BUILD_URL,
+        timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
     ]
+    
+    def statusColor = testStatus == 'FAILED' ? 'red' : 'orange'
+    def statusIcon = testStatus == 'FAILED' ? '❌' : '⚠️'
+    
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Unit Test Report - ${buildInfo.jobName} #${buildInfo.buildNumber}</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { background-color: #f5f5f5; padding: 15px; border-radius: 5px; }
+            .status { color: ${statusColor}; font-weight: bold; font-size: 18px; }
+            .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+            .failure { background-color: #f8d7da; padding: 10px; margin: 5px 0; border-radius: 3px; }
+            .test-name { font-weight: bold; color: #721c24; }
+            .error-message { color: #721c24; font-family: monospace; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>${statusIcon} Unit Test Report</h1>
+            <div class="status">Status: ${testStatus}</div>
+            <table>
+                <tr><td><strong>Job:</strong></td><td>${buildInfo.jobName}</td></tr>
+                <tr><td><strong>Build:</strong></td><td>#${buildInfo.buildNumber}</td></tr>
+                <tr><td><strong>Time:</strong></td><td>${buildInfo.timestamp}</td></tr>
+                <tr><td><strong>Build URL:</strong></td><td><a href="${buildInfo.buildUrl}">View Build</a></td></tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Test Summary</h2>
+            <p><strong>Status:</strong> ${testStatus}</p>
+            <p><strong>Message:</strong> ${testMessage}</p>
+            <p><strong>Details:</strong> ${testDetails}</p>
+            <p><strong>Tool:</strong> ${config.tool_for_unit_testing?.java ?: 'junit'}</p>
+        </div>
+        
+        <div class="section">
+            <h2>Test Results</h2>
+            <p>Detailed test results can be found in the JUnit reports and Allure report.</p>
+            <ul>
+                <li><a href="${buildInfo.buildUrl}testReport">JUnit Test Results</a></li>
+                <li><a href="${buildInfo.buildUrl}allure">Allure Test Report</a></li>
+                <li><a href="${buildInfo.buildUrl}artifact/target/surefire-reports/">Surefire Reports</a></li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>Next Steps</h2>
+            <ul>
+                <li>Review the failed test cases above</li>
+                <li>Fix the failing unit tests</li>
+                <li>Run tests locally: <code>mvn test</code></li>
+                <li>Commit and push your fixes</li>
+                <li>Monitor the next build for improvements</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>Build Information</h2>
+            <p>This report was generated automatically by the CI/CD pipeline.</p>
+            <p>For questions about failing tests, contact the development team.</p>
+        </div>
+    </body>
+    </html>
+    """
 }
 
-private String getStatusClass(String status) {
-    return status?.toLowerCase() == 'success' ? 'success' : 'failure'
+private String getDetailedEmailBody(String status, Map buildInfo, Map stageResults, Map config) {
+    def lintStatus = env.LINT_STATUS ?: 'UNKNOWN'
+    def lintMessage = env.LINT_MESSAGE ?: 'No lint information available'
+    def testStatus = env.TEST_STATUS ?: 'UNKNOWN'
+    def testMessage = env.TEST_MESSAGE ?: 'No test information available'
+    
+    return """
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; }
+            .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; }
+            .section { margin: 20px 0; padding: 15px; border: 1px solid #dee2e6; border-radius: 5px; }
+            .success { color: green; }
+            .warning { color: orange; }
+            .error { color: red; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Build Report - ${status}</h1>
+            <p><strong>Job:</strong> ${buildInfo.jobName}</p>
+            <p><strong>Build:</strong> #${buildInfo.buildNumber}</p>
+            <p><strong>Time:</strong> ${buildInfo.timestamp}</p>
+            <p><strong>URL:</strong> <a href="${buildInfo.buildUrl}">View Build</a></p>
+        </div>
+        
+        <div class="section">
+            <h2>Stage Results</h2>
+            <table>
+                <tr><th>Stage</th><th>Status</th></tr>
+                <tr><td>Lint</td><td class="${lintStatus.toLowerCase()}">${lintStatus}</td></tr>
+                <tr><td>Unit Tests</td><td class="${testStatus.toLowerCase()}">${testStatus}</td></tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Lint Details</h2>
+            <p><strong>Status:</strong> <span class="${lintStatus.toLowerCase()}">${lintStatus}</span></p>
+            <p><strong>Message:</strong> ${lintMessage}</p>
+            <p><strong>Tool:</strong> ${config.tool_for_lint_testing?.java ?: 'checkstyle'}</p>
+            
+            ${lintStatus in ['FAILED', 'UNSTABLE'] ? '''
+            <h3>Action Required</h3>
+            <ul>
+                <li>Review the attached lint report</li>
+                <li>Fix the code style violations</li>
+                <li>Re-run the build to verify fixes</li>
+            </ul>
+            ''' : ''}
+        </div>
+        
+        <div class="section">
+            <h2>Unit Test Details</h2>
+            <p><strong>Status:</strong> <span class="${testStatus.toLowerCase()}">${testStatus}</span></p>
+            <p><strong>Message:</strong> ${testMessage}</p>
+            <p><strong>Tool:</strong> ${config.tool_for_unit_testing?.java ?: 'junit'}</p>
+            
+            ${testStatus in ['FAILED', 'UNSTABLE'] ? '''
+            <h3>Action Required</h3>
+            <ul>
+                <li>Review the failing test cases</li>
+                <li>Fix the failing unit tests</li>
+                <li>Run tests locally: <code>mvn test</code></li>
+                <li>Re-run the build to verify fixes</li>
+            </ul>
+            ''' : ''}
+        </div>
+        
+        <div class="section">
+            <h2>Reports</h2>
+            <ul>
+                <li><a href="${buildInfo.buildUrl}allure">Allure Report</a></li>
+                <li><a href="${buildInfo.buildUrl}Lint_Report">Lint Report</a></li>
+                <li><a href="${buildInfo.buildUrl}artifact/">Build Artifacts</a></li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>Next Steps</h2>
+            ${getNextStepsHtml(status, lintStatus)}
+        </div>
+    </body>
+    </html>
+    """
 }
 
-private String getStatusBadgeClass(String status) {
-    switch(status?.toLowerCase()) {
-        case 'success':
-            return 'status-success'
-        case 'failure':
-        case 'failed':
-            return 'status-failure'
-        default:
-            return 'status-warning'
+private String getSlackSummaryMessage(String status, Map stageResults) {
+    def emoji = status == 'SUCCESS' ? '✅' : (status == 'UNSTABLE' ? '⚠️' : '❌')
+    def lintStatus = env.LINT_STATUS ?: 'UNKNOWN'
+    def testStatus = env.TEST_STATUS ?: 'UNKNOWN'
+    
+    def actionItems = []
+    if (lintStatus in ['FAILED', 'UNSTABLE']) {
+        actionItems.add("• Review lint violations")
+        actionItems.add("• Fix code style issues")
     }
+    if (testStatus in ['FAILED', 'UNSTABLE']) {
+        actionItems.add("• Review failing tests")
+        actionItems.add("• Fix unit test failures")
+    }
+    
+    return """${emoji} *Build ${status}*
+
+*Job:* ${env.JOB_NAME}
+*Build:* #${env.BUILD_NUMBER}
+*Time:* ${new Date().format('yyyy-MM-dd HH:mm:ss')}
+
+*Stage Results:*
+• Lint: ${getLintEmoji(lintStatus)} ${lintStatus}
+• Tests: ${getLintEmoji(testStatus)} ${testStatus}
+
+${actionItems.size() > 0 ? """
+*⚠️ Action Required:*
+${actionItems.join('\n')}
+• Re-run build after fixes
+""" : ''}
+
+<${env.BUILD_URL}|View Build> | <${env.BUILD_URL}allure|Allure Report> | <${env.BUILD_URL}testReport|Test Results>"""
 }
 
-private String getStatusColor(String status) {
-    switch(status?.toLowerCase()) {
-        case 'success':
-            return '#28a745'
-        case 'failure':
-        case 'failed':
-            return '#dc3545'
-        default:
-            return '#ffc107'
+private String getLintEmoji(String status) {
+    switch(status) {
+        case 'SUCCESS': return '✅'
+        case 'UNSTABLE': return '⚠️'
+        case 'FAILED': return '❌'
+        case 'SKIPPED': return '⏭️'
+        default: return 'ℹ️'
     }
 }
 
 private String getSlackColor(String status) {
-    switch(status?.toLowerCase()) {
-        case 'success':
-            return 'good'
-        case 'failure':
-        case 'failed':
-            return 'danger'
-        default:
-            return 'warning'
+    switch(status) {
+        case 'SUCCESS': return 'good'
+        case 'UNSTABLE': return 'warning'
+        case 'FAILED': return 'danger'
+        default: return '#439FE0'
+    }
+}
+
+private String getNextStepsHtml(String overallStatus, String lintStatus) {
+    if (lintStatus in ['FAILED', 'UNSTABLE']) {
+        return """
+        <p><strong>Lint Issues Detected:</strong></p>
+        <ol>
+            <li>Download and review the checkstyle report</li>
+            <li>Fix the code style violations in your IDE</li>
+            <li>Run checkstyle locally: <code>mvn checkstyle:check</code></li>
+            <li>Commit and push your fixes</li>
+            <li>Monitor the next build for improvements</li>
+        </ol>
+        """
+    } else {
+        return "<p>All checks passed! No action required.</p>"
     }
 }
 
