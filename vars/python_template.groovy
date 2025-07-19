@@ -1,3 +1,5 @@
+import Logger
+
 def call(Map config = [:]) {
     Logger.info("Starting Python Template Pipeline")
     
