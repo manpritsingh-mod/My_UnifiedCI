@@ -1,7 +1,5 @@
-import Logger
-
 def runLint(Map config = [:]) {
-    Logger.info("Starting lint")
+    logger.info("Starting lint")
     
     try {
         // if (!core_utils.shouldExecuteStage('lint', config)) { // checking for the linting should be executed or to be skipped
@@ -11,7 +9,7 @@ def runLint(Map config = [:]) {
 
         def language = config.project_language
         def lintTool = getLintTool(language, config)
-        Logger.info("Running lint for ${language} using ${lintTool}")
+        logger.info("Running lint for ${language} using ${lintTool}")
 
         def result = false
         switch(language) {
@@ -22,23 +20,23 @@ def runLint(Map config = [:]) {
                 result = runPythonLint(lintTool, config)
                 break
             default:
-                Logger.error("Unsupported language for lint: ${language}")
+                logger.error("Unsupported language for lint: ${language}")
         }
 
         if (result) {
-            Logger.info("Lint completed successfully")
+            logger.info("Lint completed successfully")
         } else {
-            Logger.error("Lint failed")
+            logger.error("Lint failed")
         }
         return result
     } catch (Exception e) {
-        Logger.error("Lint execution failed: ${e.getMessage()}")
+        logger.error("Lint execution failed: ${e.getMessage()}")
         return false
     }
 }
 
 private Boolean runJavaLint(String language, String lintTool, Map config) {
-    Logger.info("Executing Java lint with ${lintTool}")
+    logger.info("Executing Java lint with ${lintTool}")
     
     def command
     if (language == 'java-maven') {
@@ -53,20 +51,20 @@ private Boolean runJavaLint(String language, String lintTool, Map config) {
         return true
 
     } catch (Exception e) {
-        Logger.error("Java lint execution failed: ${e.getMessage()}")
+        logger.error("Java lint execution failed: ${e.getMessage()}")
         return false
     }
 }
 
 private Boolean runPythonLint(String lintTool, Map config) {
-    Logger.info("Executing Python lint with ${lintTool}")
+    logger.info("Executing Python lint with ${lintTool}")
     
     try {
         // sh script: PythonScript.lintCommand(lintTool)
         bat script: PythonScript.lintCommand(lintTool)
         return true
     } catch (Exception e) {
-        Logger.error("Python lint execution failed: ${e.getMessage()}")
+        logger.error("Python lint execution failed: ${e.getMessage()}")
         return false
     }
 }

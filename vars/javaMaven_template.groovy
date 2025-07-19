@@ -1,26 +1,24 @@
-import Logger
-
 def call(Map config = [:]) {
-    Logger.info("Starting Java Maven Template Pipeline")
+    logger.info("Starting Java Maven Template Pipeline")
     echo "Result of the config file ${config}"
     
     // Use default configuration if not passed
     if (!config) {
-        Logger.info("No config provided, using default configuration")
+        logger.info("No config provided, using default configuration")
         config = core_utils.getDefaultConfig()
     }
     
     // Execute Maven-specific pipeline stages
     stage('Checkout') {
         script {
-            Logger.info("CHECKOUT STAGE")
+            logger.info("CHECKOUT STAGE")
             core_github.checkout()
         }
     }
     
     stage('Setup') {
         script {
-            Logger.info("SETUP STAGE")
+            logger.info("SETUP STAGE")
             core_utils.setupProjectEnvironment(config.project_language, config)
             // Use bat for Windows compatibility
             bat 'java -version'
@@ -30,7 +28,7 @@ def call(Map config = [:]) {
     
     stage('Install Dependencies') {
         script {
-            Logger.info("INSTALL DEPENDENCIES STAGE")
+            logger.info("INSTALL DEPENDENCIES STAGE")
             core_build.installDependencies('java', 'maven', config)
         }
     }
@@ -46,7 +44,7 @@ def call(Map config = [:]) {
     
     stage('Build') {
         script {
-            Logger.info("BUILDING STAGE")
+            logger.info("BUILDING STAGE")
             core_build.buildLanguages(config.project_language, config)
         }
     }
