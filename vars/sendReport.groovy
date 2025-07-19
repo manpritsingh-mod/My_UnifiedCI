@@ -153,7 +153,7 @@ private String generateLintReportHtml(Map config) {
     ]
     
     def statusColor = lintStatus == 'FAILED' ? 'red' : 'orange'
-    def statusIcon = lintStatus == 'FAILED' ? '❌' : '⚠️'
+    def statusIcon = lintStatus == 'FAILED' ? 'failed' : 'unstable'
     
     return """
     <!DOCTYPE html>
@@ -271,7 +271,7 @@ def sendSlackSummaryReport(Map config, Map stageResults) {
 }
 
 private String getDetailedEmailSubject(String status, Map buildInfo) {
-    def emoji = status == 'SUCCESS' ? '✅' : (status == 'UNSTABLE' ? '⚠️' : '❌')
+    def emoji = status == 'SUCCESS' ? 'Success' : (status == 'UNSTABLE' ? 'Unstable' : 'failed')
     return "${emoji} Build Report: ${buildInfo.jobName} #${buildInfo.buildNumber} - ${status}"
 }
 
@@ -287,7 +287,7 @@ private String generateTestReportHtml(Map config) {
     ]
     
     def statusColor = testStatus == 'FAILED' ? 'red' : 'orange'
-    def statusIcon = testStatus == 'FAILED' ? '❌' : '⚠️'
+    def statusIcon = testStatus == 'FAILED' ? 'failed' : 'unstable'
     
     return """
     <!DOCTYPE html>
@@ -449,7 +449,7 @@ private String getDetailedEmailBody(String status, Map buildInfo, Map stageResul
 }
 
 private String getSlackSummaryMessage(String status, Map stageResults) {
-    def emoji = status == 'SUCCESS' ? '✅' : (status == 'UNSTABLE' ? '⚠️' : '❌')
+    def emoji = status == 'SUCCESS' ? 'success' : (status == 'UNSTABLE' ? 'Unstable' : 'failed')
     def lintStatus = env.LINT_STATUS ?: 'UNKNOWN'
     def testStatus = env.TEST_STATUS ?: 'UNKNOWN'
     
@@ -474,7 +474,7 @@ private String getSlackSummaryMessage(String status, Map stageResults) {
 • Tests: ${getLintEmoji(testStatus)} ${testStatus}
 
 ${actionItems.size() > 0 ? """
-*⚠️ Action Required:*
+*Action Required:*
 ${actionItems.join('\n')}
 • Re-run build after fixes
 """ : ''}
@@ -484,10 +484,10 @@ ${actionItems.join('\n')}
 
 private String getLintEmoji(String status) {
     switch(status) {
-        case 'SUCCESS': return '✅'
-        case 'UNSTABLE': return '⚠️'
-        case 'FAILED': return '❌'
-        case 'SKIPPED': return '⏭️'
+        case 'SUCCESS': return 'Success'
+        case 'UNSTABLE': return 'Unstable'
+        case 'FAILED': return 'Failed'
+        case 'SKIPPED': return 'Skipped'
         default: return 'ℹ️'
     }
 }

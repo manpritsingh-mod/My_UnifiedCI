@@ -152,16 +152,16 @@ ${getStatusMessage(status)}"""
 private String getStatusEmoji(String status) {
     switch(status.toUpperCase()) {
         case 'SUCCESS':
-            return '✅'
+            return 'Success'
         case 'FAILED':
         case 'FAILURE':
-            return '❌'
+            return 'Failure'
         case 'UNSTABLE':
-            return '⚠️'
+            return 'Unstable'
         case 'ABORTED':
-            return '🛑'
+            return 'Aborted'
         default:
-            return 'ℹ️'
+            return 'i'
     }
 }
 
@@ -196,7 +196,7 @@ private String getStatusHtmlColor(String status) {
 private String getStatusMessage(String status) {
     switch(status.toUpperCase()) {
         case 'SUCCESS':
-            return 'All stages completed successfully! 🎉'
+            return 'All stages completed successfully!'
         case 'FAILED':
         case 'FAILURE':
             return 'Build failed. Please check the logs and fix the issues.'
