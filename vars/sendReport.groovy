@@ -97,15 +97,19 @@ private def copyTestResultsToAllure() {
             // Copy all XML files from surefire-reports
             bat 'xcopy /y target\\surefire-reports\\*.xml allure-results\\ 2>nul || echo "No XML files to copy from surefire-reports"'
             
-            // Also try copying with full path
+            // Try copying with individual file approach
             def surefireFiles = findFiles(glob: 'target/surefire-reports/*.xml')
             if (surefireFiles.size() > 0) {
                 logger.info("Found ${surefireFiles.size()} surefire XML files")
                 surefireFiles.each { file ->
                     logger.info("Copying: ${file.path}")
-                    bat "copy \"${file.path}\" allure-results\\"
+                    try {
+                        bat "copy \"${file.path}\" allure-results\\ 2>nul || echo \"Failed to copy ${file.name}\""
+                        foundFiles = true
+                    } catch (Exception e) {
+                        logger.warning("Could not copy ${file.path}: ${e.getMessage()}")
+                    }
                 }
-                foundFiles = true
             } else {
                 logger.warning("No XML files found in target/surefire-reports")
             }
@@ -158,6 +162,17 @@ private def copyTestResultsToAllure() {
                         logger.warning("Could not copy ${file.path}: ${e.getMessage()}")
                     }
                 }
+            }
+        }
+        
+        // Try a simple robocopy as fallback
+        if (!foundFiles) {
+            logger.info("Trying robocopy as fallback...")
+            try {
+                bat 'robocopy target\\surefire-reports allure-results *.xml /NFL /NDL /NJH /NJS /nc /ns /np || echo "Robocopy completed"'
+                foundFiles = true
+            } catch (Exception e) {
+                logger.warning("Robocopy failed: ${e.getMessage()}")
             }
         }
         
@@ -265,33 +280,80 @@ private def getDefaultStageResults() {
 }
 
 private def getTestSummary() {
+    logger.info("=== COLLECTING TEST SUMMARY ===")
     def summary = [total: 0, passed: 0, failed: 0, skipped: 0]
     
     try {
         // Check Maven/Gradle test results
         if (fileExists('target/surefire-reports')) {
-            def testFiles = findFiles(glob: 'target/surefire-reports/TEST-*.xml')
-            testFiles.each { file ->
-                def xml = readFile(file.path)
-                summary.total += parseNumber(xml, /tests="(\d+)"/)
-                summary.failed += parseNumber(xml, /failures="(\d+)"/)
-                summary.failed += parseNumber(xml, /errors="(\d+)"/)
-                summary.skipped += parseNumber(xml, /skipped="(\d+)"/)
+            logger.info("Found target/surefire-reports directory")
+            
+            // List all files in surefire-reports for debugging
+            bat 'dir target\\surefire-reports'
+            
+            // Try multiple patterns for test XML files
+            def patterns = [
+                'target/surefire-reports/TEST-*.xml',
+                'target/surefire-reports/*.xml',
+                'target/surefire-reports/*Test.xml',
+                'target/surefire-reports/*Tests.xml'
+            ]
+            
+            def foundTestFiles = false
+            patterns.each { pattern ->
+                def testFiles = findFiles(glob: pattern)
+                if (testFiles.size() > 0) {
+                    logger.info("Found ${testFiles.size()} files with pattern: ${pattern}")
+                    foundTestFiles = true
+                    
+                    testFiles.each { file ->
+                        logger.info("Processing test file: ${file.path}")
+                        try {
+                            def xml = readFile(file.path)
+                            logger.info("File content preview: ${xml.take(200)}...")
+                            
+                            def tests = parseNumber(xml, /tests="(\d+)"/)
+                            def failures = parseNumber(xml, /failures="(\d+)"/)
+                            def errors = parseNumber(xml, /errors="(\d+)"/)
+                            def skipped = parseNumber(xml, /skipped="(\d+)"/)
+                            
+                            logger.info("Parsed from ${file.name}: tests=${tests}, failures=${failures}, errors=${errors}, skipped=${skipped}")
+                            
+                            summary.total += tests
+                            summary.failed += failures + errors
+                            summary.skipped += skipped
+                        } catch (Exception e) {
+                            logger.warning("Failed to parse ${file.path}: ${e.getMessage()}")
+                        }
+                    }
+                }
             }
+            
+            if (!foundTestFiles) {
+                logger.warning("No XML test files found in target/surefire-reports with any pattern")
+            }
+        } else {
+            logger.info("target/surefire-reports directory not found")
         }
         
         // Check pytest results
         if (fileExists('test-results.xml')) {
+            logger.info("Found test-results.xml file")
             def xml = readFile('test-results.xml')
             summary.total += parseNumber(xml, /tests="(\d+)"/)
             summary.failed += parseNumber(xml, /failures="(\d+)"/)
             summary.skipped += parseNumber(xml, /skipped="(\d+)"/)
+        } else {
+            logger.info("test-results.xml file not found")
         }
         
         summary.passed = summary.total - summary.failed - summary.skipped
         
+        logger.info("Final test summary: ${summary}")
+        
     } catch (Exception e) {
-        logger.warning("Failed to get test summary: ${e.getMessage()}")
+        logger.error("Failed to get test summary: ${e.getMessage()}")
+        e.printStackTrace()
     }
     
     return summary
@@ -325,8 +387,14 @@ private def getLintSummary() {
 private def parseNumber(String text, String pattern) {
     try {
         def match = (text =~ pattern)
-        return match ? Integer.parseInt(match[0][1]) : 0
+        if (match && match.size() > 0 && match[0].size() > 1) {
+            def numberStr = match[0][1]
+            logger.debug("Parsing '${numberStr}' from pattern '${pattern}'")
+            return Integer.parseInt(numberStr)
+        }
+        return 0
     } catch (Exception e) {
+        logger.warning("Failed to parse number with pattern '${pattern}': ${e.getMessage()}")
         return 0
     }
 }
