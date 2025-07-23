@@ -1,296 +1,207 @@
 /**
- * SIMPLIFIED Report generation utilities
- * Basic structure: Allure + Lint + Test reports only
+ * SIMPLE Report generation utilities
+ * - Collect basic test and lint data
+ * - Send plain text email summary
  */
 
-// 1. MAIN METHOD: Generate and send all reports
+// MAIN METHOD: Generate and send reports
 def generateAndSendReports(Map config, Map stageResults = [:]) {
-    logger.info("Generating basic reports")
+    logger.info("Generating simple build summary")
     
     try {
-        // Generate Allure report
-        generateAllureReport(config)
-        
-        // Always generate lint report
-        generateLintReport(config)
-        
-        // Always generate test report
-        generateTestReport(config)
-        
-        // Send email with reports
-        sendEmailWithReports(config, stageResults)
+        def buildSummary = collectBuildSummary(config, stageResults)
+        sendBuildSummaryEmail(config, buildSummary)
         
     } catch (Exception e) {
         logger.error("Failed to generate reports: ${e.getMessage()}")
     }
 }
 
-// 2. GENERATE ALLURE REPORT
-def generateAllureReport(Map config) {
-    logger.info("Generating Allure report")
+// COLLECT BUILD SUMMARY
+def collectBuildSummary(Map config, Map stageResults) {
+    logger.info("Collecting build summary data")
     
-    try {
-        // Create allure results directory if not exists
-        if (!fileExists('allure-results')) {
-            bat 'mkdir allure-results'
-        }
-        
-        // Generate Allure report
-        allure([
-            includeProperties: false,
-            jdk: '',
-            properties: [],
-            reportBuildPolicy: 'ALWAYS',
-            results: [[path: 'allure-results']]
-        ])
-        
-        logger.info("Allure report generated successfully")
-        
-    } catch (Exception e) {
-        logger.warning("Failed to generate Allure report: ${e.getMessage()}")
-    }
+    def summary = [
+        buildInfo: getBuildInfo(),
+        stageResults: stageResults ?: getDefaultStageResults(),
+        testSummary: getTestSummary(),
+        lintSummary: getLintSummary(),
+        overallStatus: notify.getBuildStatus()
+    ]
+    
+    return summary
 }
 
-// 3. GENERATE LINT REPORT
-def generateLintReport(Map config) {
-    logger.info("Generating lint report")
+// SEND EMAIL SUMMARY
+def sendBuildSummaryEmail(Map config, Map buildSummary) {
+    logger.info("Sending build summary email")
     
     try {
-        // Archive checkstyle XML if exists
-        if (fileExists('target/checkstyle-result.xml')) {
-            archiveArtifacts artifacts: 'target/checkstyle-result.xml', allowEmptyArchive: true
-            logger.info("Checkstyle XML archived")
-        }
-        
-        // Create simple HTML lint report
-        def reportHtml = createLintReportHtml()
-        writeFile file: 'lint-report.html', text: reportHtml
-        archiveArtifacts artifacts: 'lint-report.html', allowEmptyArchive: true
-        
-        logger.info("Lint report generated successfully")
-        
-    } catch (Exception e) {
-        logger.warning("Failed to generate lint report: ${e.getMessage()}")
-    }
-}
-
-// 4. GENERATE TEST REPORT
-def generateTestReport(Map config) {
-    logger.info("Generating test report")
-    
-    try {
-        // Archive JUnit XML if exists
-        if (fileExists('target/surefire-reports')) {
-            archiveArtifacts artifacts: 'target/surefire-reports/**/*.xml', allowEmptyArchive: true
-            logger.info("JUnit XML archived")
-        }
-        
-        // Create simple HTML test report
-        def reportHtml = createTestReportHtml()
-        writeFile file: 'test-report.html', text: reportHtml
-        archiveArtifacts artifacts: 'test-report.html', allowEmptyArchive: true
-        
-        logger.info("Test report generated successfully")
-        
-    } catch (Exception e) {
-        logger.warning("Failed to generate test report: ${e.getMessage()}")
-    }
-}
-
-// 5. SEND EMAIL WITH REPORTS
-def sendEmailWithReports(Map config, Map stageResults) {
-    logger.info("Sending email with reports")
-    
-    try {
-        def buildStatus = notify.getBuildStatus()
-        def subject = "Build Report: ${env.JOB_NAME} #${env.BUILD_NUMBER} - ${buildStatus}"
-        def body = createEmailBody(buildStatus, stageResults)
+        def subject = "Build Summary: ${buildSummary.buildInfo.jobName} #${buildSummary.buildInfo.buildNumber} - ${buildSummary.overallStatus}"
+        def body = generateEmailBody(buildSummary)
         
         emailext (
             subject: subject,
             body: body,
-            mimeType: 'text/html',
-            to: config.notifications?.email?.recipients?.join(',') ?: 'team@company.com',
-            attachmentsPattern: 'lint-report.html,test-report.html,target/checkstyle-result.xml'
+            mimeType: 'text/plain',
+            to: config.notifications?.email?.recipients?.join(',') ?: 'smanprit022@gmail.com'
         )
         
-        logger.info("Email with reports sent successfully")
+        logger.info("Build summary email sent successfully")
         
     } catch (Exception e) {
-        logger.error("Failed to send email with reports: ${e.getMessage()}")
+        logger.error("Failed to send email: ${e.getMessage()}")
     }
 }
 
-// 6. HELPER METHODS
-
-private String createLintReportHtml() {
-    def lintStatus = env.LINT_STATUS ?: 'SUCCESS'
-    def buildInfo = getBuildInfo()
-    def statusColor = lintStatus == 'SUCCESS' ? 'green' : (lintStatus == 'UNSTABLE' ? 'orange' : 'red')
-    
-    return """
-    <html>
-    <head><title>Lint Report</title></head>
-    <body style="font-family: Arial;">
-        <h1>Lint Report - <span style="color: ${statusColor};">${lintStatus}</span></h1>
-        <table border="1" style="border-collapse: collapse;">
-            <tr><td><b>Job:</b></td><td>${buildInfo.jobName}</td></tr>
-            <tr><td><b>Build:</b></td><td>#${buildInfo.buildNumber}</td></tr>
-            <tr><td><b>Status:</b></td><td style="color: ${statusColor};"><b>${lintStatus}</b></td></tr>
-            <tr><td><b>Time:</b></td><td>${new Date().format('yyyy-MM-dd HH:mm:ss')}</td></tr>
-        </table>
-        
-        <h2>Summary</h2>
-        <p><b>Lint Status:</b> ${lintStatus}</p>
-        <p><b>Tool:</b> checkstyle</p>
-        <p><b>Message:</b> ${getLintMessage(lintStatus)}</p>
-        
-        <h2>Next Steps</h2>
-        ${getLintNextSteps(lintStatus)}
-    </body>
-    </html>
-    """
-}
-
-private String createTestReportHtml() {
-    def testStatus = env.TEST_STATUS ?: 'SUCCESS'
-    def buildInfo = getBuildInfo()
-    def statusColor = testStatus == 'SUCCESS' ? 'green' : (testStatus == 'UNSTABLE' ? 'orange' : 'red')
-    
-    return """
-    <html>
-    <head><title>Test Report</title></head>
-    <body style="font-family: Arial;">
-        <h1>Test Report - <span style="color: ${statusColor};">${testStatus}</span></h1>
-        <table border="1" style="border-collapse: collapse;">
-            <tr><td><b>Job:</b></td><td>${buildInfo.jobName}</td></tr>
-            <tr><td><b>Build:</b></td><td>#${buildInfo.buildNumber}</td></tr>
-            <tr><td><b>Status:</b></td><td style="color: ${statusColor};"><b>${testStatus}</b></td></tr>
-            <tr><td><b>Time:</b></td><td>${new Date().format('yyyy-MM-dd HH:mm:ss')}</td></tr>
-        </table>
-        
-        <h2>Summary</h2>
-        <p><b>Test Status:</b> ${testStatus}</p>
-        <p><b>Tool:</b> junit</p>
-        <p><b>Message:</b> ${getTestMessage(testStatus)}</p>
-        
-        <h2>Next Steps</h2>
-        ${getTestNextSteps(testStatus)}
-    </body>
-    </html>
-    """
-}
-
-private String createEmailBody(String buildStatus, Map stageResults) {
-    def buildInfo = getBuildInfo()
-    def lintStatus = env.LINT_STATUS ?: 'SUCCESS'
-    def testStatus = env.TEST_STATUS ?: 'SUCCESS'
-    
-    return """
-    <html>
-    <body style="font-family: Arial;">
-        <h1>Build Report - ${buildStatus}</h1>
-        
-        <h2>Build Information</h2>
-        <table border="1" style="border-collapse: collapse;">
-            <tr><td><b>Job:</b></td><td>${buildInfo.jobName}</td></tr>
-            <tr><td><b>Build:</b></td><td>#${buildInfo.buildNumber}</td></tr>
-            <tr><td><b>Status:</b></td><td>${buildStatus}</td></tr>
-            <tr><td><b>Time:</b></td><td>${new Date().format('yyyy-MM-dd HH:mm:ss')}</td></tr>
-            <tr><td><b>URL:</b></td><td><a href="${buildInfo.buildUrl}">View Build</a></td></tr>
-        </table>
-        
-        <h2>Stage Results</h2>
-        <table border="1" style="border-collapse: collapse;">
-            <tr><th>Stage</th><th>Status</th></tr>
-            <tr><td>Lint</td><td>${lintStatus}</td></tr>
-            <tr><td>Unit Tests</td><td>${testStatus}</td></tr>
-        </table>
-        
-        <h2>Reports</h2>
-        <ul>
-            <li><a href="${buildInfo.buildUrl}allure">Allure Report</a></li>
-            <li>Lint Report (attached)</li>
-            <li>Test Report (attached)</li>
-        </ul>
-        
-        <h2>Action Required</h2>
-        ${getActionItems(lintStatus, testStatus)}
-    </body>
-    </html>
-    """
-}
+// HELPER METHODS
 
 private def getBuildInfo() {
     return [
         jobName: env.JOB_NAME ?: 'Unknown Job',
         buildNumber: env.BUILD_NUMBER ?: 'Unknown Build',
-        buildUrl: env.BUILD_URL ?: 'Unknown URL'
+        buildUrl: env.BUILD_URL ?: 'Unknown URL',
+        gitBranch: env.GIT_BRANCH ?: 'Unknown Branch',
+        timestamp: new Date().format('yyyy-MM-dd HH:mm:ss'),
+        duration: currentBuild.durationString ?: 'Unknown'
     ]
 }
 
-private String getActionItems(String lintStatus, String testStatus) {
-    def actions = []
+private def getDefaultStageResults() {
+    return [
+        'Checkout': 'SUCCESS',
+        'Build': 'SUCCESS',
+        'Test': 'SUCCESS',
+        'Lint': 'SUCCESS'
+    ]
+}
+
+private def getTestSummary() {
+    def summary = [total: 0, passed: 0, failed: 0, skipped: 0]
     
-    if (lintStatus in ['FAILED', 'UNSTABLE']) {
-        actions.add("Fix lint violations")
-    }
-    if (testStatus in ['FAILED', 'UNSTABLE']) {
-        actions.add("Fix failing tests")
+    try {
+        // Check Maven/Gradle test results
+        if (fileExists('target/surefire-reports')) {
+            def testFiles = findFiles(glob: 'target/surefire-reports/TEST-*.xml')
+            testFiles.each { file ->
+                def xml = readFile(file.path)
+                summary.total += parseNumber(xml, /tests="(\d+)"/)
+                summary.failed += parseNumber(xml, /failures="(\d+)"/)
+                summary.failed += parseNumber(xml, /errors="(\d+)"/)
+                summary.skipped += parseNumber(xml, /skipped="(\d+)"/)
+            }
+        }
+        
+        // Check pytest results
+        if (fileExists('test-results.xml')) {
+            def xml = readFile('test-results.xml')
+            summary.total += parseNumber(xml, /tests="(\d+)"/)
+            summary.failed += parseNumber(xml, /failures="(\d+)"/)
+            summary.skipped += parseNumber(xml, /skipped="(\d+)"/)
+        }
+        
+        summary.passed = summary.total - summary.failed - summary.skipped
+        
+    } catch (Exception e) {
+        logger.warning("Failed to get test summary: ${e.getMessage()}")
     }
     
-    if (actions.isEmpty()) {
-        return "<p>✅ No action required - all checks passed!</p>"
-    } else {
-        return "<ul><li>${actions.join('</li><li>')}</li></ul>"
+    return summary
+}
+
+private def getLintSummary() {
+    def summary = [violations: 0, tool: 'none']
+    
+    try {
+        // Check checkstyle (Java)
+        if (fileExists('target/checkstyle-result.xml')) {
+            def xml = readFile('target/checkstyle-result.xml')
+            summary.violations = (xml =~ /<error/).size()
+            summary.tool = 'checkstyle'
+        }
+        
+        // Check pylint (Python)
+        if (fileExists('pylint-report.txt')) {
+            def report = readFile('pylint-report.txt')
+            summary.violations = report.split('\n').findAll { it.contains(':') && !it.contains('*') }.size()
+            summary.tool = 'pylint'
+        }
+        
+    } catch (Exception e) {
+        logger.warning("Failed to get lint summary: ${e.getMessage()}")
+    }
+    
+    return summary
+}
+
+private def parseNumber(String text, String pattern) {
+    try {
+        def match = (text =~ pattern)
+        return match ? Integer.parseInt(match[0][1]) : 0
+    } catch (Exception e) {
+        return 0
     }
 }
 
-private String getLintMessage(String status) {
-    switch(status) {
-        case 'SUCCESS': return 'All lint checks passed successfully!'
-        case 'UNSTABLE': return 'Lint found issues but marked as non-critical'
-        case 'FAILED': return 'Lint checks failed - action required'
-        default: return 'Lint status unknown'
-    }
+private String generateEmailBody(Map buildSummary) {
+    def status = buildSummary.overallStatus
+    def buildInfo = buildSummary.buildInfo
+    def stageResults = buildSummary.stageResults
+    def testSummary = buildSummary.testSummary
+    def lintSummary = buildSummary.lintSummary
+    
+    return """
+===============================================
+BUILD SUMMARY - ${status}
+===============================================
+
+BUILD INFO:
+-----------
+Job:      ${buildInfo.jobName}
+Build:    #${buildInfo.buildNumber}
+Status:   ${status}
+Duration: ${buildInfo.duration}
+Branch:   ${buildInfo.gitBranch}
+Time:     ${buildInfo.timestamp}
+URL:      ${buildInfo.buildUrl}
+
+STAGES:
+-------
+${generateStageText(stageResults)}
+
+TESTS:
+------
+Total:    ${testSummary.total}
+Passed:   ${testSummary.passed}
+Failed:   ${testSummary.failed}
+Skipped:  ${testSummary.skipped}
+
+LINT:
+-----
+Tool:       ${lintSummary.tool}
+Violations: ${lintSummary.violations}
+
+===============================================
+${getStatusMessage(status)}
+===============================================
+    """
 }
 
-private String getTestMessage(String status) {
-    switch(status) {
-        case 'SUCCESS': return 'All unit tests passed successfully!'
-        case 'UNSTABLE': return 'Some tests failed but marked as non-critical'
-        case 'FAILED': return 'Unit tests failed - action required'
-        default: return 'Test status unknown'
+private String generateStageText(Map stageResults) {
+    def text = ""
+    stageResults.each { stage, result ->
+        def emoji = result == 'SUCCESS' ? '✓' : '✗'
+        text += "${stage.padRight(15)} ${emoji} ${result}\n"
     }
+    return text
 }
 
-private String getLintNextSteps(String status) {
-    if (status == 'SUCCESS') {
-        return "<p>✅ Great! All lint checks passed. No action needed.</p>"
-    } else {
-        return """
-        <ul>
-            <li>Review checkstyle violations</li>
-            <li>Fix code style issues</li>
-            <li>Run locally: <code>mvn checkstyle:check</code></li>
-            <li>Commit and push fixes</li>
-        </ul>
-        """
-    }
-}
-
-private String getTestNextSteps(String status) {
-    if (status == 'SUCCESS') {
-        return "<p>✅ Excellent! All unit tests passed. No action needed.</p>"
-    } else {
-        return """
-        <ul>
-            <li>Review failing test cases</li>
-            <li>Fix unit test failures</li>
-            <li>Run locally: <code>mvn test</code></li>
-            <li>Commit and push fixes</li>
-        </ul>
-        """
+private String getStatusMessage(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS': return 'All stages completed successfully! 🎉'
+        case 'FAILED': return 'Build failed. Please check the logs.'
+        case 'UNSTABLE': return 'Build completed with warnings.'
+        default: return 'Build completed.'
     }
 }
 

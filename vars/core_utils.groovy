@@ -89,16 +89,13 @@ def readProjectConfig() {
     def config = [:]
 
     try {
-        // Try parsing YAML directly first
+        // Try parsing YAML directly
         config = readYaml text: fileContent
-        logger.info("Parsed config using readYaml: ${config}")
+        logger.info("Parsed config: ${config}")
     } catch (Exception e) {
         logger.warning("readYaml failed: ${e.getMessage()}")
-        logger.info("Attempting simple YAML parsing...")
-        
-        // Fallback to simple YAML parsing
-        config = parseSimpleYaml(fileContent)
-        logger.info("Parsed config using simple parser: ${config}")
+        logger.info("Using default configuration instead")
+        config = getDefaultConfig()
     }
     return validateAndSetDefaults(config)
 }
@@ -132,104 +129,7 @@ def validateAndSetDefaults(Map config){
     return config
 }
 
-// Simple YAML parser for basic configuration
-def parseSimpleYaml(String yamlContent) {
-    logger.info("Parsing YAML content with simple parser")
-    
-    def config = [:]
-    def lines = yamlContent.split('\n')
-    def currentSection = null
-    def currentSubSection = null
-    
-    lines.each { line ->
-        def trimmedLine = line.trim()
-        
-        // Skip comments and empty lines
-        if (trimmedLine.startsWith('#') || trimmedLine.isEmpty()) {
-            return
-        }
-        
-        // Handle main sections (no indentation)
-        if (!line.startsWith(' ') && line.contains(':')) {
-            def parts = line.split(':', 2)
-            def key = parts[0].trim()
-            def value = parts.length > 1 ? parts[1].trim() : ''
-            
-            if (value.isEmpty()) {
-                // This is a section header
-                currentSection = key
-                config[key] = [:]
-                currentSubSection = null
-            } else {
-                // This is a key-value pair
-                config[key] = parseValue(value)
-                currentSection = null
-                currentSubSection = null
-            }
-        }
-        // Handle subsections (2 spaces indentation)
-        else if (line.startsWith('  ') && !line.startsWith('    ') && line.contains(':')) {
-            def parts = line.trim().split(':', 2)
-            def key = parts[0].trim()
-            def value = parts.length > 1 ? parts[1].trim() : ''
-            
-            if (currentSection) {
-                if (value.isEmpty()) {
-                    // This is a subsection header
-                    currentSubSection = key
-                    config[currentSection][key] = [:]
-                } else {
-                    // This is a key-value pair in a section
-                    config[currentSection][key] = parseValue(value)
-                }
-            }
-        }
-        // Handle sub-subsections (4 spaces indentation)
-        else if (line.startsWith('    ') && line.contains(':')) {
-            def parts = line.trim().split(':', 2)
-            def key = parts[0].trim()
-            def value = parts.length > 1 ? parts[1].trim() : ''
-            
-            if (currentSection && currentSubSection) {
-                config[currentSection][currentSubSection][key] = parseValue(value)
-            }
-        }
-        // Handle list items
-        else if (line.trim().startsWith('- ')) {
-            def value = line.trim().substring(2).trim()
-            if (currentSection && currentSubSection) {
-                if (!config[currentSection][currentSubSection] instanceof List) {
-                    config[currentSection][currentSubSection] = []
-                }
-                config[currentSection][currentSubSection].add(parseValue(value))
-            }
-        }
-    }
-    
-    return config
-}
 
-// Parse individual values (handle booleans, strings, etc.)
-private def parseValue(String value) {
-    if (value.isEmpty()) return ''
-    
-    // Remove quotes if present
-    if ((value.startsWith('"') && value.endsWith('"')) || 
-        (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.substring(1, value.length() - 1)
-    }
-    
-    // Handle booleans
-    if (value.toLowerCase() == 'true') return true
-    if (value.toLowerCase() == 'false') return false
-    
-    // Handle numbers
-    if (value.isNumber()) {
-        return value.contains('.') ? Double.parseDouble(value) : Integer.parseInt(value)
-    }
-    
-    return value
-}
 
 def getDefaultConfig(){
     logger.info("Using Default Configuration -> All the stages will run by default")

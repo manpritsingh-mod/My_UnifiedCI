@@ -1,3 +1,10 @@
+/**
+ * SIMPLIFIED Notification utilities for Jenkins pipeline
+ * Email: Always send (default)
+ * Slack: Only if enabled in config
+ */
+
+// 1. MAIN METHOD: Send build notification
 def notifyBuildStatus(String status, Map config = [:]) {
     logger.info("Sending build notification: ${status}")
     
@@ -9,8 +16,16 @@ def notifyBuildStatus(String status, Map config = [:]) {
             timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
         ]
         
-        // Send email notification
+        // ALWAYS send email notification (default behavior)
         sendEmailNotification(notificationData, config)
+        
+        // CONDITIONALLY send Slack notification (only if enabled)
+        if (config.notifications?.slack?.enabled == true) {
+            logger.info("Slack is enabled - sending Slack notification")
+            sendSlackNotification(notificationData, config)
+        } else {
+            logger.info("Slack is disabled - skipping Slack notification")
+        }
         
         // Log to console
         logNotification(notificationData)
@@ -47,9 +62,9 @@ def getBuildStatus() {
     return status
 }
 
-// 4. SEND EMAIL NOTIFICATION
+// 4. SEND EMAIL NOTIFICATION (ALWAYS)
 private def sendEmailNotification(Map notificationData, Map config) {
-    logger.info("Sending email notification")
+    logger.info("Sending email notification (always enabled)")
     
     def subject = "${notificationData.status}: ${notificationData.buildInfo.jobName} #${notificationData.buildInfo.buildNumber}"
     def body = generateEmailBody(notificationData)
@@ -58,8 +73,8 @@ private def sendEmailNotification(Map notificationData, Map config) {
         emailext (
             subject: subject,
             body: body,
-            mimeType: 'text/html',
-            to: config.notifications?.email?.recipients?.join(',') ?: 'team@company.com'
+            mimeType: 'text/plain',
+            to: config.notifications?.email?.recipients?.join(',') ?: 'smanprit022@gmail.com'
         )
         logger.info("Email notification sent successfully")
     } catch (Exception e) {
@@ -67,11 +82,35 @@ private def sendEmailNotification(Map notificationData, Map config) {
     }
 }
 
-// 5. SEND SLACK NOTIFICATION (DISABLED)
+// 5. SEND SLACK NOTIFICATION (CONDITIONAL - COMMENTED FOR NOW)
 def sendSlackNotification(Map notificationData, Map config) {
-    logger.info("Slack notification is DISABLED")
-    // TODO: Enable when Slack access is available
-    // Implementation ready but commented out
+    logger.info("Preparing Slack notification...")
+    
+    /* SLACK IMPLEMENTATION - COMMENTED UNTIL ACCESS IS AVAILABLE
+    
+    def slackChannel = config.notifications?.slack?.channel ?: '#builds'
+    def color = getSlackColor(notificationData.status)
+    def message = generateSlackMessage(notificationData)
+    
+    try {
+        // Using Jenkins Slack Plugin (simple setup)
+        slackSend (
+            channel: slackChannel,
+            color: color,
+            message: message
+        )
+        
+        logger.info("Slack notification sent successfully")
+        
+    } catch (Exception e) {
+        logger.error("Failed to send Slack notification: ${e.getMessage()}")
+    }
+    
+    END OF COMMENTED SLACK IMPLEMENTATION */
+    
+    // For now, just log that Slack would be sent
+    logger.info("Slack notification would be sent to: ${config.notifications?.slack?.channel ?: '#builds'}")
+    logger.info("Slack message: ${generateSlackMessage(notificationData)}")
 }
 
 // 6. HELPER METHODS
@@ -97,25 +136,61 @@ private def logNotification(Map notificationData) {
 private String generateEmailBody(Map notificationData) {
     def status = notificationData.status
     def buildInfo = notificationData.buildInfo
-    def statusColor = getStatusHtmlColor(status)
+    def statusEmoji = getStatusEmoji(status)
     
     return """
-    <html>
-    <body style="font-family: Arial, sans-serif;">
-        <h2 style="color: ${statusColor};">Build ${status}</h2>
-        <table border="1" style="border-collapse: collapse; margin: 10px 0; width: 100%;">
-            <tr><td><strong>Job:</strong></td><td>${buildInfo.jobName}</td></tr>
-            <tr><td><strong>Build:</strong></td><td>#${buildInfo.buildNumber}</td></tr>
-            <tr><td><strong>Status:</strong></td><td><strong style="color: ${statusColor};">${status}</strong></td></tr>
-            <tr><td><strong>Time:</strong></td><td>${notificationData.timestamp}</td></tr>
-            <tr><td><strong>Branch:</strong></td><td>${buildInfo.gitBranch}</td></tr>
-            <tr><td><strong>Build URL:</strong></td><td><a href="${buildInfo.buildUrl}">View Build</a></td></tr>
-        </table>
-        
-        <p><strong>Message:</strong> ${getStatusMessage(status)}</p>
-    </body>
-    </html>
+${statusEmoji} BUILD NOTIFICATION - ${status} ${statusEmoji}
+
+Job Name:     ${buildInfo.jobName}
+Build #:      ${buildInfo.buildNumber}
+Status:       ${status}
+Timestamp:    ${notificationData.timestamp}
+Branch:       ${buildInfo.gitBranch}
+Build URL:    ${buildInfo.buildUrl}
+
+Message: ${getStatusMessage(status)}
+
+---
+This notification was sent automatically by Jenkins CI/CD pipeline.
     """
+}
+
+private String generateSlackMessage(Map notificationData) {
+    def status = notificationData.status
+    def buildInfo = notificationData.buildInfo
+    def emoji = getStatusEmoji(status)
+    
+    return """${emoji} *Build ${status}*
+
+*Job:* ${buildInfo.jobName}
+*Build:* #${buildInfo.buildNumber}
+*Branch:* ${buildInfo.gitBranch}
+*Time:* ${notificationData.timestamp}
+
+<${buildInfo.buildUrl}|View Build>
+
+${getStatusMessage(status)}"""
+}
+
+private String getStatusEmoji(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS': return ':white_check_mark:'
+        case 'FAILED':
+        case 'FAILURE': return ':x:'
+        case 'UNSTABLE': return ':warning:'
+        case 'ABORTED': return ':stop_sign:'
+        default: return ':information_source:'
+    }
+}
+
+private String getSlackColor(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS': return 'good'
+        case 'FAILED':
+        case 'FAILURE': return 'danger'
+        case 'UNSTABLE': return 'warning'
+        default: return '#439FE0'
+    }
 }
 
 private String getStatusHtmlColor(String status) {
