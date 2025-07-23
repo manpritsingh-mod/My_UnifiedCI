@@ -93,8 +93,22 @@ private def copyTestResultsToAllure() {
         if (fileExists('target/surefire-reports')) {
             logger.info("Found target/surefire-reports directory")
             bat 'dir target\\surefire-reports'
-            bat 'if exist "target\\surefire-reports\\*.xml" xcopy /s /y target\\surefire-reports\\*.xml allure-results\\'
-            foundFiles = true
+            
+            // Copy all XML files from surefire-reports
+            bat 'xcopy /y target\\surefire-reports\\*.xml allure-results\\ 2>nul || echo "No XML files to copy from surefire-reports"'
+            
+            // Also try copying with full path
+            def surefireFiles = findFiles(glob: 'target/surefire-reports/*.xml')
+            if (surefireFiles.size() > 0) {
+                logger.info("Found ${surefireFiles.size()} surefire XML files")
+                surefireFiles.each { file ->
+                    logger.info("Copying: ${file.path}")
+                    bat "copy \"${file.path}\" allure-results\\"
+                }
+                foundFiles = true
+            } else {
+                logger.warning("No XML files found in target/surefire-reports")
+            }
         } else {
             logger.info("target/surefire-reports directory not found")
         }
@@ -147,12 +161,28 @@ private def copyTestResultsToAllure() {
             }
         }
         
-        if (!foundFiles) {
-            logger.warning("No test result files found! Creating dummy test result for Allure...")
-            createDummyTestResult()
+        // Always list what we have in allure-results
+        logger.info("Contents of allure-results directory:")
+        bat 'dir allure-results'
+        
+        // Check if we have any XML files in allure-results
+        def allureFiles = findFiles(glob: 'allure-results/*.xml')
+        if (allureFiles.size() > 0) {
+            logger.info("Successfully copied ${allureFiles.size()} XML files to allure-results")
+            allureFiles.each { file ->
+                logger.info("  - ${file.name}")
+                // Show first few lines of each XML to verify content
+                try {
+                    def content = readFile(file.path)
+                    def firstLines = content.split('\n')[0..2].join('\n')
+                    logger.info("    Content preview: ${firstLines}")
+                } catch (Exception e) {
+                    logger.warning("Could not read ${file.path}: ${e.getMessage()}")
+                }
+            }
         } else {
-            // List what we copied
-            bat 'dir allure-results'
+            logger.warning("No XML files found in allure-results! Creating dummy test result...")
+            createDummyTestResult()
         }
         
     } catch (Exception e) {

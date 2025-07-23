@@ -139,7 +139,7 @@ private String generateEmailBody(Map notificationData) {
     def statusEmoji = getStatusEmoji(status)
     
     return """
-${statusEmoji} BUILD NOTIFICATION - ${status} ${statusEmoji}
+BUILD NOTIFICATION - ${status}
 
 Job Name:     ${buildInfo.jobName}
 Build #:      ${buildInfo.buildNumber}
@@ -170,17 +170,6 @@ private String generateSlackMessage(Map notificationData) {
 <${buildInfo.buildUrl}|View Build>
 
 ${getStatusMessage(status)}"""
-}
-
-private String getStatusEmoji(String status) {
-    switch(status.toUpperCase()) {
-        case 'SUCCESS': return ':white_check_mark:'
-        case 'FAILED':
-        case 'FAILURE': return ':x:'
-        case 'UNSTABLE': return ':warning:'
-        case 'ABORTED': return ':stop_sign:'
-        default: return ':information_source:'
-    }
 }
 
 private String getSlackColor(String status) {
