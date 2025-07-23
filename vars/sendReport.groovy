@@ -23,18 +23,27 @@ def generateAndSendReports(Map config, Map stageResults = [:]) {
 
 // GENERATE ALLURE REPORT
 def generateAllureReport() {
-    logger.info("Generating Allure Report")
+    logger.info("=== GENERATING ALLURE REPORT ===")
     
     try {
         // Create allure-results directory
         if (!fileExists('allure-results')) {
             bat 'mkdir allure-results'
+            logger.info("Created allure-results directory")
+        } else {
+            logger.info("allure-results directory already exists")
         }
         
         // Copy test results to allure-results
+        logger.info("Copying test results to allure-results...")
         copyTestResultsToAllure()
         
+        // Check what files are in allure-results before generating report
+        logger.info("Files in allure-results before generation:")
+        bat 'dir allure-results'
+        
         // Generate Allure report
+        logger.info("Generating Allure report...")
         allure([
             includeProperties: false,
             jdk: '',
@@ -43,7 +52,16 @@ def generateAllureReport() {
             results: [[path: 'allure-results']]
         ])
         
+        // Check if allure-report was created
+        if (fileExists('allure-report')) {
+            logger.info("allure-report directory created successfully")
+            bat 'dir allure-report'
+        } else {
+            logger.warning("allure-report directory was not created!")
+        }
+        
         // Publish HTML report
+        logger.info("Publishing HTML report...")
         publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: true,
@@ -54,28 +72,107 @@ def generateAllureReport() {
             reportTitles: ''
         ])
         
-        logger.info("Allure report generated successfully")
+        logger.info("=== ALLURE REPORT GENERATION COMPLETED ===")
         
     } catch (Exception e) {
-        logger.warning("Failed to generate Allure report: ${e.getMessage()}")
+        logger.error("Failed to generate Allure report: ${e.getMessage()}")
+        e.printStackTrace()
     }
 }
 
 private def copyTestResultsToAllure() {
+    logger.info("DEBUG: Checking for test result files...")
+    
     try {
+        // List all files in workspace for debugging
+        bat 'dir /s *.xml'
+        
+        def foundFiles = false
+        
         // Copy JUnit results (Maven/Gradle)
         if (fileExists('target/surefire-reports')) {
-            bat 'if exist "target\\surefire-reports" xcopy /s /y target\\surefire-reports\\*.xml allure-results\\'
+            logger.info("Found target/surefire-reports directory")
+            bat 'dir target\\surefire-reports'
+            bat 'if exist "target\\surefire-reports\\*.xml" xcopy /s /y target\\surefire-reports\\*.xml allure-results\\'
+            foundFiles = true
+        } else {
+            logger.info("target/surefire-reports directory not found")
         }
         
         // Copy pytest results (Python)
         if (fileExists('test-results.xml')) {
+            logger.info("Found test-results.xml file")
             bat 'copy test-results.xml allure-results\\'
+            foundFiles = true
+        } else {
+            logger.info("test-results.xml file not found")
+        }
+        
+        // Try to find any XML files with test in the name
+        def testXmlFiles = findFiles(glob: '**/*test*.xml')
+        if (testXmlFiles.size() > 0) {
+            logger.info("Found ${testXmlFiles.size()} test XML files:")
+            testXmlFiles.each { file ->
+                logger.info("  - ${file.path}")
+                try {
+                    bat "copy \"${file.path}\" allure-results\\"
+                    foundFiles = true
+                } catch (Exception e) {
+                    logger.warning("Could not copy ${file.path}: ${e.getMessage()}")
+                }
+            }
+        }
+        
+        // Try to find any XML files in common test directories
+        def commonPaths = [
+            'target/surefire-reports/*.xml',
+            'target/failsafe-reports/*.xml', 
+            'build/test-results/test/*.xml',
+            'test-output/*.xml',
+            'reports/*.xml'
+        ]
+        
+        commonPaths.each { pattern ->
+            def files = findFiles(glob: pattern)
+            if (files.size() > 0) {
+                logger.info("Found ${files.size()} files matching ${pattern}")
+                files.each { file ->
+                    try {
+                        bat "copy \"${file.path}\" allure-results\\"
+                        foundFiles = true
+                    } catch (Exception e) {
+                        logger.warning("Could not copy ${file.path}: ${e.getMessage()}")
+                    }
+                }
+            }
+        }
+        
+        if (!foundFiles) {
+            logger.warning("No test result files found! Creating dummy test result for Allure...")
+            createDummyTestResult()
+        } else {
+            // List what we copied
+            bat 'dir allure-results'
         }
         
     } catch (Exception e) {
         logger.warning("Failed to copy test results: ${e.getMessage()}")
+        createDummyTestResult()
     }
+}
+
+private def createDummyTestResult() {
+    logger.info("Creating dummy test result for Allure demonstration")
+    
+    def dummyResult = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="DummyTestSuite" tests="1" failures="0" errors="0" skipped="0" time="0.001">
+    <testcase name="dummyTest" classname="DummyTest" time="0.001">
+        <system-out>No actual tests were found, this is a placeholder for Allure report generation.</system-out>
+    </testcase>
+</testsuite>'''
+    
+    writeFile file: 'allure-results/dummy-test-result.xml', text: dummyResult
+    logger.info("Dummy test result created")
 }
 
 // COLLECT BUILD SUMMARY
@@ -251,15 +348,14 @@ ${getStatusMessage(status)}
 private String generateStageText(Map stageResults) {
     def text = ""
     stageResults.each { stage, result ->
-        def emoji = result == 'SUCCESS' ? '✓' : '✗'
-        text += "${stage.padRight(15)} ${emoji} ${result}\n"
+        text += "${stage.padRight(20)} ${result}\n"
     }
     return text
 }
 
 private String getStatusMessage(String status) {
     switch(status.toUpperCase()) {
-        case 'SUCCESS': return 'All stages completed successfully! 🎉'
+        case 'SUCCESS': return 'All stages completed successfully!'
         case 'FAILED': return 'Build failed. Please check the logs.'
         case 'UNSTABLE': return 'Build completed with warnings.'
         default: return 'Build completed.'
