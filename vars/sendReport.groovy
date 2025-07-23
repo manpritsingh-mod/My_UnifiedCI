@@ -4,16 +4,77 @@
  * - Send plain text email summary
  */
 
-// MAIN METHOD: Generate and send reports
+// MAIN METHOD: Generate Allure report and send email summary
 def generateAndSendReports(Map config, Map stageResults = [:]) {
-    logger.info("Generating simple build summary")
+    logger.info("Generating Allure report and build summary")
     
     try {
+        // Generate Allure report first
+        generateAllureReport()
+        
+        // Then collect summary and send email
         def buildSummary = collectBuildSummary(config, stageResults)
         sendBuildSummaryEmail(config, buildSummary)
         
     } catch (Exception e) {
         logger.error("Failed to generate reports: ${e.getMessage()}")
+    }
+}
+
+// GENERATE ALLURE REPORT
+def generateAllureReport() {
+    logger.info("Generating Allure Report")
+    
+    try {
+        // Create allure-results directory
+        if (!fileExists('allure-results')) {
+            bat 'mkdir allure-results'
+        }
+        
+        // Copy test results to allure-results
+        copyTestResultsToAllure()
+        
+        // Generate Allure report
+        allure([
+            includeProperties: false,
+            jdk: '',
+            properties: [],
+            reportBuildPolicy: 'ALWAYS',
+            results: [[path: 'allure-results']]
+        ])
+        
+        // Publish HTML report
+        publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: true,
+            keepAll: true,
+            reportDir: 'allure-report',
+            reportFiles: 'index.html',
+            reportName: 'Allure Report',
+            reportTitles: ''
+        ])
+        
+        logger.info("Allure report generated successfully")
+        
+    } catch (Exception e) {
+        logger.warning("Failed to generate Allure report: ${e.getMessage()}")
+    }
+}
+
+private def copyTestResultsToAllure() {
+    try {
+        // Copy JUnit results (Maven/Gradle)
+        if (fileExists('target/surefire-reports')) {
+            bat 'if exist "target\\surefire-reports" xcopy /s /y target\\surefire-reports\\*.xml allure-results\\'
+        }
+        
+        // Copy pytest results (Python)
+        if (fileExists('test-results.xml')) {
+            bat 'copy test-results.xml allure-results\\'
+        }
+        
+    } catch (Exception e) {
+        logger.warning("Failed to copy test results: ${e.getMessage()}")
     }
 }
 

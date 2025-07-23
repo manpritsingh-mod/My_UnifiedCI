@@ -63,4 +63,20 @@ def call(Map config = [:]) {
             }
         }
     }
+    
+    stage('Generate Reports') {
+        script {
+            logger.info("GENERATE REPORTS STAGE")
+            
+            // Generate Allure report and send email summary
+            sendReport.generateAndSendReports(config, [
+                'Checkout': 'SUCCESS',
+                'Setup': 'SUCCESS', 
+                'Install Dependencies': 'SUCCESS',
+                'Lint': core_utils.shouldExecuteStage('lint', config) ? 'SUCCESS' : 'SKIPPED',
+                'Build': 'SUCCESS',
+                'Unit Test': core_utils.shouldExecuteStage('unittest', config) ? 'SUCCESS' : 'SKIPPED'
+            ])
+        }
+    }
 }
