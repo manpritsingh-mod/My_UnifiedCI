@@ -192,6 +192,17 @@ private String getStatusHtmlColor(String status) {
     }
 }
 
+private String getStatusEmoji(String status) {
+    switch(status.toUpperCase()) {
+        case 'SUCCESS': return '[SUCCESS]'
+        case 'FAILED':
+        case 'FAILURE': return '[FAILED]'
+        case 'UNSTABLE': return '[UNSTABLE]'
+        case 'ABORTED': return '[ABORTED]'
+        default: return '[INFO]'
+    }
+}
+
 private String getStatusMessage(String status) {
     switch(status.toUpperCase()) {
         case 'SUCCESS':
