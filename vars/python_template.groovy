@@ -32,9 +32,18 @@ def call(Map config = [:]) {
     }
     
     stage('Lint') {
-        script {
-            logger.info("LINTING STAGE")
-            lint_utils.runLint(config)
+        if (core_utils.shouldExecuteStage('lint', config)) {
+            script {
+                logger.info("LINTING STAGE")
+                def lintResult = lint_utils.runLint(config)
+                env.LINT_RESULT = lintResult
+                logger.info("Lint stage completed with result: ${lintResult}")
+            }
+        } else {
+            script {
+                logger.info("Linting is disabled - skipping")
+                env.LINT_RESULT = 'SKIPPED'
+            }
         }
     }
     
@@ -46,9 +55,18 @@ def call(Map config = [:]) {
     }
     
     stage('Unit Test') {
-        script {
-            logger.info("UNIT-TEST STAGE")
-            core_test.runUnitTest(config)
+        if (core_utils.shouldExecuteStage('unittest', config)) {
+            script {
+                logger.info("UNIT-TEST STAGE")
+                def testResult = core_test.runUnitTest(config)
+                env.UNIT_TEST_RESULT = testResult
+                logger.info("Unit test stage completed with result: ${testResult}")
+            }
+        } else {
+            script {
+                logger.info("Unit testing is disabled - skipping")
+                env.UNIT_TEST_RESULT = 'SKIPPED'
+            }
         }
     }
     
@@ -61,9 +79,9 @@ def call(Map config = [:]) {
                 'Checkout': 'SUCCESS',
                 'Setup': 'SUCCESS',
                 'Install Dependencies': 'SUCCESS', 
-                'Lint': 'SUCCESS',
+                'Lint': env.LINT_RESULT ?: 'SUCCESS',
                 'Build': 'SUCCESS',
-                'Unit Test': 'SUCCESS'
+                'Unit Test': env.UNIT_TEST_RESULT ?: 'SUCCESS'
             ])
         }
     }

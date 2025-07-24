@@ -16,21 +16,29 @@ def runLint(Map config = [:]) {
                 break
             default:
                 logger.error("Unsupported language for lint: ${language}")
+                return 'FAILED'
         }
 
-        if (result) {
+        if (result == true) {
             logger.info("Lint completed successfully")
+            return 'SUCCESS'
+        } else if (result == 'UNSTABLE') {
+            logger.warning("Lint found violations - marking build as UNSTABLE")
+            currentBuild.result = 'UNSTABLE'
+            return 'UNSTABLE'
         } else {
-            logger.error("Lint failed")
+            logger.error("Lint failed critically")
+            currentBuild.result = 'UNSTABLE'
+            return 'UNSTABLE'
         }
-        return result
     } catch (Exception e) {
         logger.error("Lint execution failed: ${e.getMessage()}")
-        return false
+        currentBuild.result = 'UNSTABLE'
+        return 'UNSTABLE'
     }
 }
 
-private Boolean runJavaLint(String language, String lintTool, Map config) {
+private def runJavaLint(String language, String lintTool, Map config) {
     logger.info("Executing Java lint with ${lintTool}")
     
     def command
@@ -42,22 +50,40 @@ private Boolean runJavaLint(String language, String lintTool, Map config) {
 
     try {
         bat script: command
+        logger.info("Lint passed with no violations")
         return true
     } catch (Exception e) {
-        logger.error("Java lint execution failed: ${e.getMessage()}")
-        return false
+        logger.warning("Lint found violations but continuing pipeline: ${e.getMessage()}")
+        
+        // Check if lint results exist (lint ran but found violations)
+        if (fileExists('target/checkstyle-result.xml') || fileExists('build/reports/checkstyle')) {
+            logger.info("Lint results found - violations detected, marking as UNSTABLE")
+            return 'UNSTABLE'
+        } else {
+            logger.error("No lint results found - critical lint failure")
+            return 'UNSTABLE'
+        }
     }
 }
 
-private Boolean runPythonLint(String lintTool, Map config) {
+private def runPythonLint(String lintTool, Map config) {
     logger.info("Executing Python lint with ${lintTool}")
     
     try {
         bat script: PythonScript.lintCommand(lintTool)
+        logger.info("Python lint passed with no violations")
         return true
     } catch (Exception e) {
-        logger.error("Python lint execution failed: ${e.getMessage()}")
-        return false
+        logger.warning("Python lint found violations but continuing pipeline: ${e.getMessage()}")
+        
+        // Check if lint results exist
+        if (fileExists('pylint-report.txt') || fileExists('flake8-report.txt')) {
+            logger.info("Lint results found - violations detected, marking as UNSTABLE")
+            return 'UNSTABLE'
+        } else {
+            logger.error("No lint results found - critical lint failure")
+            return 'UNSTABLE'
+        }
     }
 }
 

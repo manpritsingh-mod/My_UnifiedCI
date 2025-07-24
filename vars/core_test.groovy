@@ -16,21 +16,29 @@ def runUnitTest(Map config = [:]) {
                 break
             default:
                 logger.error("Unsupported language for unit tests: ${language}")
+                return 'FAILED'
         }
 
-        if (result) {
+        if (result == true) {
             logger.info("Unit tests completed successfully")
+            return 'SUCCESS'
+        } else if (result == 'UNSTABLE') {
+            logger.warning("Unit tests completed with failures - marking build as UNSTABLE")
+            currentBuild.result = 'UNSTABLE'
+            return 'UNSTABLE'
         } else {
-            logger.error("Unit tests failed")
+            logger.error("Unit tests failed critically")
+            currentBuild.result = 'UNSTABLE'
+            return 'UNSTABLE'
         }
-        return result
     } catch (Exception e) {
         logger.error("Unit test execution failed: ${e.getMessage()}")
-        return false
+        currentBuild.result = 'UNSTABLE'
+        return 'UNSTABLE'
     }
 }
 
-private Boolean runJavaUnitTest(String language, String testTool, Map config) {
+private def runJavaUnitTest(String language, String testTool, Map config) {
     logger.info("Executing Java unit tests with ${testTool}")
     
     def command
@@ -42,22 +50,40 @@ private Boolean runJavaUnitTest(String language, String testTool, Map config) {
 
     try {
         bat script: command
+        logger.info("Unit tests passed successfully")
         return true
     } catch (Exception e) {
-        logger.error("Java unit test execution failed: ${e.getMessage()}")
-        return false
+        logger.warning("Unit tests failed but continuing pipeline: ${e.getMessage()}")
+        
+        // Check if test results exist (tests ran but some failed)
+        if (fileExists('target/surefire-reports') || fileExists('build/test-results')) {
+            logger.info("Test results found - tests ran but some failed, marking as UNSTABLE")
+            return 'UNSTABLE'
+        } else {
+            logger.error("No test results found - critical test failure")
+            return 'UNSTABLE'
+        }
     }
 }
 
-private Boolean runPythonUnitTest(String testTool, Map config) {
+private def runPythonUnitTest(String testTool, Map config) {
     logger.info("Executing Python unit tests with ${testTool}")
     
     try {
         bat script: PythonScript.testCommand(testTool)
+        logger.info("Python unit tests passed successfully")
         return true
     } catch (Exception e) {
-        logger.error("Python unit test execution failed: ${e.getMessage()}")
-        return false
+        logger.warning("Python unit tests failed but continuing pipeline: ${e.getMessage()}")
+        
+        // Check if test results exist
+        if (fileExists('test-results.xml') || fileExists('pytest-report.xml')) {
+            logger.info("Test results found - tests ran but some failed, marking as UNSTABLE")
+            return 'UNSTABLE'
+        } else {
+            logger.error("No test results found - critical test failure")
+            return 'UNSTABLE'
+        }
     }
 }
 
