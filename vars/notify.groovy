@@ -35,34 +35,16 @@ def notifyBuildStatus(String status, Map config = [:]) {
     }
 }
 
-// 2. DETERMINE OVERALL BUILD STATUS
-def getOverallBuildStatus(Map stageResults = [:]) {
-    logger.info("Determining overall build status from stage results: ${stageResults}")
-    
-    if (!stageResults || stageResults.isEmpty()) {
-        return 'SUCCESS'
-    }
-    
-    def hasFailures = stageResults.values().any { it == 'FAILED' }
-    def hasUnstable = stageResults.values().any { it == 'UNSTABLE' }
-    
-    if (hasFailures) {
-        return 'FAILED'
-    } else if (hasUnstable) {
-        return 'UNSTABLE'
-    } else {
-        return 'SUCCESS'
-    }
-}
 
-// 3. GET CURRENT BUILD STATUS (from Jenkins)
+
+// 2. GET CURRENT BUILD STATUS (from Jenkins)
 def getBuildStatus() {
     def status = currentBuild.result ?: 'SUCCESS'
     logger.info("Current Jenkins build status: ${status}")
     return status
 }
 
-// 4. SEND EMAIL NOTIFICATION (ALWAYS)
+// 3. SEND EMAIL NOTIFICATION (ALWAYS)
 private def sendEmailNotification(Map notificationData, Map config) {
     logger.info("Sending email notification (always enabled)")
     
@@ -82,21 +64,19 @@ private def sendEmailNotification(Map notificationData, Map config) {
     }
 }
 
-// 5. SEND SLACK NOTIFICATION (CONDITIONAL - COMMENTED FOR NOW)
+// 4. SEND SLACK NOTIFICATION (CONDITIONAL - COMMENTED FOR NOW)
 def sendSlackNotification(Map notificationData, Map config) {
     logger.info("Preparing Slack notification...")
     
     /* SLACK IMPLEMENTATION - COMMENTED UNTIL ACCESS IS AVAILABLE
     
     def slackChannel = config.notifications?.slack?.channel ?: '#builds'
-    def color = getSlackColor(notificationData.status)
     def message = generateSlackMessage(notificationData)
     
     try {
         // Using Jenkins Slack Plugin (simple setup)
         slackSend (
             channel: slackChannel,
-            color: color,
             message: message
         )
         
@@ -113,9 +93,9 @@ def sendSlackNotification(Map notificationData, Map config) {
     logger.info("Slack message: ${generateSlackMessage(notificationData)}")
 }
 
-// 6. HELPER METHODS
+// 5. HELPER METHODS
 
-private def getBuildInfo() {
+def getBuildInfo() {
     return [
         jobName: env.JOB_NAME ?: 'Unknown Job',
         buildNumber: env.BUILD_NUMBER ?: 'Unknown Build',
@@ -136,74 +116,43 @@ private def logNotification(Map notificationData) {
 private String generateEmailBody(Map notificationData) {
     def status = notificationData.status
     def buildInfo = notificationData.buildInfo
-    def statusEmoji = getStatusEmoji(status)
     
     return """
-BUILD NOTIFICATION - ${status}
+        BUILD NOTIFICATION - ${status}
 
-Job Name:     ${buildInfo.jobName}
-Build #:      ${buildInfo.buildNumber}
-Status:       ${status}
-Timestamp:    ${notificationData.timestamp}
-Branch:       ${buildInfo.gitBranch}
-Build URL:    ${buildInfo.buildUrl}
+        Job Name:     ${buildInfo.jobName}
+        Build #:      ${buildInfo.buildNumber}
+        Status:       ${status}
+        Timestamp:    ${notificationData.timestamp}
+        Branch:       ${buildInfo.gitBranch}
+        Build URL:    ${buildInfo.buildUrl}
 
-Message: ${getStatusMessage(status)}
+        Message: ${getStatusMessage(status)}
 
----
-This notification was sent automatically by Jenkins CI/CD pipeline.
+        ---
+        This notification was sent automatically by Jenkins CI/CD pipeline.
     """
 }
 
 private String generateSlackMessage(Map notificationData) {
     def status = notificationData.status
     def buildInfo = notificationData.buildInfo
-    def emoji = getStatusEmoji(status)
     
-    return """${emoji} *Build ${status}*
+    return """
+        *Build ${status}*
 
-*Job:* ${buildInfo.jobName}
-*Build:* #${buildInfo.buildNumber}
-*Branch:* ${buildInfo.gitBranch}
-*Time:* ${notificationData.timestamp}
+        *Job:* ${buildInfo.jobName}
+        *Build:* #${buildInfo.buildNumber}
+        *Branch:* ${buildInfo.gitBranch}
+        *Time:* ${notificationData.timestamp}
 
-<${buildInfo.buildUrl}|View Build>
+        <${buildInfo.buildUrl}|View Build>
 
-${getStatusMessage(status)}"""
+        ${getStatusMessage(status)}
+        """
 }
 
-private String getSlackColor(String status) {
-    switch(status.toUpperCase()) {
-        case 'SUCCESS': return 'good'
-        case 'FAILED':
-        case 'FAILURE': return 'danger'
-        case 'UNSTABLE': return 'warning'
-        default: return '#439FE0'
-    }
-}
-
-private String getStatusHtmlColor(String status) {
-    switch(status.toUpperCase()) {
-        case 'SUCCESS': return 'green'
-        case 'FAILED':
-        case 'FAILURE': return 'red'
-        case 'UNSTABLE': return 'orange'
-        default: return 'blue'
-    }
-}
-
-private String getStatusEmoji(String status) {
-    switch(status.toUpperCase()) {
-        case 'SUCCESS': return '[SUCCESS]'
-        case 'FAILED':
-        case 'FAILURE': return '[FAILED]'
-        case 'UNSTABLE': return '[UNSTABLE]'
-        case 'ABORTED': return '[ABORTED]'
-        default: return '[INFO]'
-    }
-}
-
-private String getStatusMessage(String status) {
+def getStatusMessage(String status) {
     switch(status.toUpperCase()) {
         case 'SUCCESS':
             return 'All stages completed successfully!'

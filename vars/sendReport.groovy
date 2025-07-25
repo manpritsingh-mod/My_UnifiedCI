@@ -260,14 +260,11 @@ def sendBuildSummaryEmail(Map config, Map buildSummary) {
 // HELPER METHODS
 
 private def getBuildInfo() {
-    return [
-        jobName: env.JOB_NAME ?: 'Unknown Job',
-        buildNumber: env.BUILD_NUMBER ?: 'Unknown Build',
-        buildUrl: env.BUILD_URL ?: 'Unknown URL',
-        gitBranch: env.GIT_BRANCH ?: 'Unknown Branch',
-        timestamp: new Date().format('yyyy-MM-dd HH:mm:ss'),
-        duration: currentBuild.durationString ?: 'Unknown'
-    ]
+    // Use notify's getBuildInfo and add additional fields
+    def buildInfo = notify.getBuildInfo()
+    buildInfo.timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
+    buildInfo.duration = currentBuild.durationString ?: 'Unknown'
+    return buildInfo
 }
 
 private def getDefaultStageResults() {
@@ -438,7 +435,7 @@ Tool:       ${lintSummary.tool}
 Violations: ${lintSummary.violations}
 
 ===============================================
-${getStatusMessage(status)}
+${notify.getStatusMessage(status)}
 ===============================================
     """
 }
@@ -452,12 +449,8 @@ private String generateStageText(Map stageResults) {
 }
 
 private String getStatusMessage(String status) {
-    switch(status.toUpperCase()) {
-        case 'SUCCESS': return 'All stages completed successfully!'
-        case 'FAILED': return 'Build failed. Please check the logs.'
-        case 'UNSTABLE': return 'Build completed with warnings.'
-        default: return 'Build completed.'
-    }
+    // Use notify's getStatusMessage method
+    return notify.getStatusMessage(status)
 }
 
 return this
