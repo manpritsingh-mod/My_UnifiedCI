@@ -31,45 +31,52 @@ def call(Map config = [:]) {
                 logger.info("SETUP STAGE")
                 core_utils.setupProjectEnvironment(config.project_language, config)
                 
-                // Try different Python commands to find available Python installation
-                def pythonFound = false
-                def pythonCommands = ['python', 'python3', 'py', 'C:\\Python\\python.exe', 'C:\\Python39\\python.exe', 'C:\\Python311\\python.exe']
+                // Simple Python detection
+                def pythonCmd = 'python'
+                def pipCmd = 'pip'
                 
-                for (cmd in pythonCommands) {
+                // Try to find Python
+                try {
+                    bat 'python --version'
+                    pythonCmd = 'python'
+                } catch (Exception e1) {
                     try {
-                        bat "${cmd} --version"
-                        env.PYTHON_CMD = cmd
-                        pythonFound = true
-                        logger.info("Found Python using command: ${cmd}")
-                        break
-                    } catch (Exception e) {
-                        logger.info("Python not found with command: ${cmd}")
+                        bat 'python3 --version'
+                        pythonCmd = 'python3'
+                    } catch (Exception e2) {
+                        try {
+                            bat 'py --version'
+                            pythonCmd = 'py'
+                        } catch (Exception e3) {
+                            throw new Exception("Python not found! Please install Python and add it to PATH.")
+                        }
                     }
-                }
-                
-                if (!pythonFound) {
-                    throw new Exception("Python is not installed or not in PATH. Please install Python and ensure it's accessible.")
                 }
                 
                 // Try to find pip
-                def pipCommands = ['pip', 'pip3', 'py -m pip', "${env.PYTHON_CMD} -m pip"]
-                def pipFound = false
-                
-                for (cmd in pipCommands) {
+                try {
+                    bat 'pip --version'
+                    pipCmd = 'pip'
+                } catch (Exception e1) {
                     try {
-                        bat "${cmd} --version"
-                        env.PIP_CMD = cmd
-                        pipFound = true
-                        logger.info("Found pip using command: ${cmd}")
-                        break
-                    } catch (Exception e) {
-                        logger.info("Pip not found with command: ${cmd}")
+                        bat 'pip3 --version'
+                        pipCmd = 'pip3'
+                    } catch (Exception e2) {
+                        try {
+                            bat "${pythonCmd} -m pip --version"
+                            pipCmd = "${pythonCmd} -m pip"
+                        } catch (Exception e3) {
+                            throw new Exception("Pip not found! Please install pip.")
+                        }
                     }
                 }
                 
-                if (!pipFound) {
-                    throw new Exception("Pip is not installed or not accessible. Please install pip.")
-                }
+                // Set environment variables for later use
+                env.PYTHON_CMD = pythonCmd
+                env.PIP_CMD = pipCmd
+                
+                logger.info("Using Python: ${pythonCmd}")
+                logger.info("Using Pip: ${pipCmd}")
                 
                 stageResults['Setup'] = 'SUCCESS'
             } catch (Exception e) {

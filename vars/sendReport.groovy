@@ -26,8 +26,10 @@ def makeAllureReport() {
     logger.info("Making Allure report...")
     
     try {
-        // Create folder for test results
-        bat 'mkdir allure-results 2>nul || echo "Folder exists"'
+        // Create folder for test results (Windows safe way)
+        if (!fileExists('allure-results')) {
+            bat 'mkdir allure-results'
+        }
         
         // Copy all test files we can find
         copyAllTestFiles()
@@ -62,38 +64,50 @@ def makeAllureReport() {
 def copyAllTestFiles() {
     logger.info("Looking for test files...")
     
-    // List of places where test files usually are
-    def testLocations = [
-        'target/surefire-reports/*.xml',     // Maven
-        'build/test-results/test/*.xml',     // Gradle
-        'test-results.xml',                  // Python pytest
-        '**/*test*.xml'                      // Any test XML files
-    ]
-    
     def foundAny = false
     
-    // Try each location
-    testLocations.each { location ->
-        try {
-            if (location.contains('*')) {
-                // Pattern search
-                def files = findFiles(glob: location)
-                files.each { file ->
-                    bat "copy \"${file.path}\" allure-results\\ 2>nul"
+    try {
+        // Look for Maven test files
+        if (fileExists('target/surefire-reports')) {
+            def files = findFiles(glob: 'target/surefire-reports/*.xml')
+            files.each { file ->
+                try {
+                    bat "copy \"${file.path}\" allure-results\\"
                     foundAny = true
-                    logger.info("Copied: ${file.name}")
-                }
-            } else {
-                // Single file
-                if (fileExists(location)) {
-                    bat "copy \"${location}\" allure-results\\"
-                    foundAny = true
-                    logger.info("Copied: ${location}")
+                    logger.info("Copied Maven test: ${file.name}")
+                } catch (Exception e) {
+                    logger.info("Could not copy ${file.name}")
                 }
             }
-        } catch (Exception e) {
-            // Ignore errors, just try next location
         }
+        
+        // Look for Gradle test files
+        if (fileExists('build/test-results/test')) {
+            def files = findFiles(glob: 'build/test-results/test/*.xml')
+            files.each { file ->
+                try {
+                    bat "copy \"${file.path}\" allure-results\\"
+                    foundAny = true
+                    logger.info("Copied Gradle test: ${file.name}")
+                } catch (Exception e) {
+                    logger.info("Could not copy ${file.name}")
+                }
+            }
+        }
+        
+        // Look for Python test file
+        if (fileExists('test-results.xml')) {
+            try {
+                bat "copy test-results.xml allure-results\\"
+                foundAny = true
+                logger.info("Copied Python test: test-results.xml")
+            } catch (Exception e) {
+                logger.info("Could not copy test-results.xml")
+            }
+        }
+        
+    } catch (Exception e) {
+        logger.info("Error looking for test files: ${e.getMessage()}")
     }
     
     // If no files found, create a dummy one so Allure doesn't break
