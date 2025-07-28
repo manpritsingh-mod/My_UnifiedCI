@@ -1,3 +1,9 @@
+/**
+ * Python Pipeline Template - Executes complete Python CI/CD pipeline
+ * Handles Python project detection, dependency installation, linting, testing, and reporting
+ * @param config Pipeline configuration map (optional, uses defaults if not provided)
+ * Usage: python_template() or python_template([project_language: 'python', lint: true])
+ */
 def call(Map config = [:]) {
     logger.info("Starting Python Template Pipeline")
     
@@ -7,10 +13,14 @@ def call(Map config = [:]) {
         config = core_utils.getDefaultConfig()
     }
     
-    // Initialize stage results tracking
+    // Initialize stage results tracking for email reporting
     def stageResults = [:]
     
     // Execute Python-specific pipeline stages
+    /**
+     * STAGE 1: Checkout - Downloads source code from Git repository
+     * Uses core_github.checkout() to pull latest code from configured branch
+     */
     stage('Checkout') {
         script {
             try {
@@ -25,17 +35,22 @@ def call(Map config = [:]) {
         }
     }
     
+    /**
+     * STAGE 2: Setup - Detects Python and pip installations, sets up environment
+     * Tries multiple Python commands (python, python3, py) to find working installation
+     * Sets PYTHON_CMD and PIP_CMD environment variables for later stages
+     */
     stage('Setup') {
         script {
             try {
                 logger.info("SETUP STAGE")
                 core_utils.setupProjectEnvironment(config.project_language, config)
                 
-                // Simple Python detection
+                // Simple Python detection - try common Python commands
                 def pythonCmd = 'python'
                 def pipCmd = 'pip'
                 
-                // Try to find Python
+                // Try to find Python installation (python -> python3 -> py)
                 try {
                     bat 'python --version'
                     // sh 'python --version'  // Linux equivalent
@@ -56,7 +71,7 @@ def call(Map config = [:]) {
                     }
                 }
                 
-                // Try to find pip
+                // Try to find pip installation (pip -> pip3 -> python -m pip)
                 try {
                     bat 'pip --version'
                     // sh 'pip --version'     // Linux equivalent
@@ -77,7 +92,7 @@ def call(Map config = [:]) {
                     }
                 }
                 
-                // Set environment variables for later use
+                // Set environment variables for use in other pipeline stages
                 env.PYTHON_CMD = pythonCmd
                 env.PIP_CMD = pipCmd
                 
@@ -93,6 +108,10 @@ def call(Map config = [:]) {
         }
     }
     
+    /**
+     * STAGE 3: Install Dependencies - Installs Python packages from requirements.txt
+     * Uses pip to install all project dependencies needed for build and test
+     */
     stage('Install Dependencies') {
         script {
             try {
@@ -107,6 +126,11 @@ def call(Map config = [:]) {
         }
     }
     
+    /**
+     * STAGE 4: Lint - Runs code quality checks using pylint (optional stage)
+     * Checks Python code for style violations, errors, and code quality issues
+     * Can be disabled in config, returns SUCCESS/UNSTABLE/FAILURE based on violations
+     */
     stage('Lint') {
         if (core_utils.shouldExecuteStage('lint', config)) {
             script {

@@ -8,6 +8,11 @@ def setupEnvironment(){
     return true
 }
 
+/**
+ * Detects project programming language by examining build files
+ * @return String detected language ('java-maven', 'java-gradle', 'python', or 'unknown')
+ * Usage: def language = core_utils.detectProjectLanguage()
+ */
 def detectProjectLanguage(){
     logger.info("Detecting project language")
 
@@ -38,6 +43,13 @@ def task_languageDetection(){
     return detectedLanguage
 }
 
+/**
+ * Sets up Jenkins environment variables based on detected project language
+ * @param language Project language ('java-maven', 'java-gradle', or 'python')
+ * @param config Pipeline configuration map
+ * @return Boolean true when setup completes
+ * Usage: core_utils.setupProjectEnvironment('java-maven', config)
+ */
 def setupProjectEnvironment(String language, Map config = [:]){
     logger.info("Setting up project environment for language: ${language}")
     switch(language){
@@ -131,6 +143,11 @@ def validateAndSetDefaults(Map config){
 
 
 
+/**
+ * Creates default pipeline configuration when no ci-config.yaml file exists
+ * @return Map default configuration with all stages enabled and standard tools
+ * Usage: def config = core_utils.getDefaultConfig()
+ */
 def getDefaultConfig(){
     logger.info("Using Default Configuration -> All the stages will run by default")
 
@@ -153,7 +170,13 @@ def getDefaultConfig(){
     return config
 }
 
-// Helper method to check the stage should be executed
+/**
+ * Checks if a pipeline stage should be executed based on configuration
+ * @param stageName Name of stage to check ('unittest', 'lint', etc.)
+ * @param config Pipeline configuration map
+ * @return Boolean true if stage should run, false if disabled
+ * Usage: if (core_utils.shouldExecuteStage('lint', config)) { runLint() }
+ */
 def shouldExecuteStage(String stageName, Map config){
     switch(stageName.toLowerCase()) {
         case 'unittest':

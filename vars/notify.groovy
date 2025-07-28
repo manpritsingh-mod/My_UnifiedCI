@@ -4,7 +4,12 @@
  * Slack: Only if enabled in config
  */
 
-// 1. MAIN METHOD: Send build notification
+/**
+ * Main method to send build notifications via email and optionally Slack
+ * @param status Build status ('SUCCESS', 'FAILURE', 'UNSTABLE', 'ABORTED')
+ * @param config Pipeline configuration map containing notification settings
+ * Usage: notify.notifyBuildStatus('SUCCESS', config)
+ */
 def notifyBuildStatus(String status, Map config = [:]) {
     logger.info("Sending build notification: ${status}")
     

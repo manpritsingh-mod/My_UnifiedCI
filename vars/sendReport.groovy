@@ -3,15 +3,20 @@
  * Does 3 things: 1) Copy test files 2) Make Allure report 3) Send email
  */
 
-// MAIN METHOD: Do everything in simple steps
+/**
+ * Main method: Generate Allure reports and send email summary
+ * @param config Pipeline configuration map
+ * @param stageResults Map of stage names and their results (SUCCESS/FAILURE/UNSTABLE/SKIPPED)
+ * Usage: sendReport.generateAndSendReports(config, ['Checkout': 'SUCCESS', 'Build': 'FAILURE'])
+ */
 def generateAndSendReports(Map config, Map stageResults = [:]) {
     logger.info("Starting simple report generation...")
     
     try {
-        // Step 1: Make Allure report
+        // Step 1: Make Allure report from test files
         makeAllureReport()
         
-        // Step 2: Send email with summary
+        // Step 2: Send email with build summary
         sendSimpleEmail(config, stageResults)
         
         logger.info("Reports completed successfully!")
@@ -21,7 +26,11 @@ def generateAndSendReports(Map config, Map stageResults = [:]) {
     }
 }
 
-// STEP 1: Make Allure Report (Simple Version)
+/**
+ * Creates Allure HTML report from test result files
+ * Searches for test XML files in common locations and generates visual report
+ * Usage: Called automatically by generateAndSendReports()
+ */
 def makeAllureReport() {
     logger.info("Making Allure report...")
     
@@ -32,10 +41,10 @@ def makeAllureReport() {
             // sh 'mkdir -p allure-results' // Linux equivalent
         }
         
-        // Copy all test files we can find
+        // Copy all test files we can find from Maven/Gradle/Python
         copyAllTestFiles()
         
-        // Generate the Allure report
+        // Generate the Allure HTML report using Jenkins plugin
         allure([
             includeProperties: false,
             jdk: '',
@@ -44,7 +53,7 @@ def makeAllureReport() {
             results: [[path: 'allure-results']]
         ])
         
-        // Publish the HTML report
+        // Publish the HTML report so it's accessible in Jenkins UI
         publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: true,
@@ -61,14 +70,19 @@ def makeAllureReport() {
     }
 }
 
-// Copy test files from common locations (Simple Version)
+/**
+ * Copies test result XML files from common build tool locations to allure-results folder
+ * Searches Maven (target/surefire-reports), Gradle (build/test-results), Python (test-results.xml)
+ * Creates dummy file if no tests found to prevent Allure from breaking
+ * Usage: Called automatically by makeAllureReport()
+ */
 def copyAllTestFiles() {
     logger.info("Looking for test files...")
     
     def foundAny = false
     
     try {
-        // Look for Maven test files
+        // Look for Maven test files in target/surefire-reports/*.xml
         if (fileExists('target/surefire-reports')) {
             def files = findFiles(glob: 'target/surefire-reports/*.xml')
             files.each { file ->
@@ -83,7 +97,7 @@ def copyAllTestFiles() {
             }
         }
         
-        // Look for Gradle test files
+        // Look for Gradle test files in build/test-results/test/*.xml
         if (fileExists('build/test-results/test')) {
             def files = findFiles(glob: 'build/test-results/test/*.xml')
             files.each { file ->
@@ -98,7 +112,7 @@ def copyAllTestFiles() {
             }
         }
         
-        // Look for Python test file
+        // Look for Python pytest file test-results.xml
         if (fileExists('test-results.xml')) {
             try {
                 bat "copy test-results.xml allure-results\\"
@@ -121,7 +135,12 @@ def copyAllTestFiles() {
     }
 }
 
-// Make a fake test file so Allure doesn't break
+/**
+ * Creates a dummy test XML file when no real tests are found
+ * Prevents Allure from failing when there are no test results
+ * @return void
+ * Usage: Called automatically when no test files are found
+ */
 def makeDummyTestFile() {
     def dummyXml = '''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="NoTestsFound" tests="1" failures="0" errors="0" skipped="0">
@@ -134,27 +153,32 @@ def makeDummyTestFile() {
     logger.info("Created dummy test file")
 }
 
-// STEP 2: Send Simple Email
+/**
+ * Sends plain text email with build summary including test results and lint violations
+ * @param config Pipeline configuration containing email recipients
+ * @param stageResults Map of stage names and their results
+ * Usage: sendSimpleEmail(config, ['Build': 'SUCCESS', 'Test': 'FAILURE'])
+ */
 def sendSimpleEmail(Map config, Map stageResults) {
     logger.info("Sending email...")
     
     try {
-        // Get basic info
+        // Get basic build information from Jenkins environment
         def jobName = env.JOB_NAME ?: 'Unknown Job'
         def buildNumber = env.BUILD_NUMBER ?: '0'
         def buildStatus = notify.getBuildStatus()
         
-        // Count tests
+        // Count test results from XML files
         def testCounts = countTests()
         
-        // Count lint issues
+        // Count lint violations from report files
         def lintCount = countLintIssues()
         
-        // Make email
+        // Create email subject and body
         def subject = "Build ${buildStatus}: ${jobName} #${buildNumber}"
         def body = makeEmailBody(jobName, buildNumber, buildStatus, stageResults, testCounts, lintCount)
         
-        // Send it
+        // Send email using Jenkins emailext plugin
         emailext (
             subject: subject,
             body: body,
@@ -171,30 +195,34 @@ def sendSimpleEmail(Map config, Map stageResults) {
 
 // SIMPLE HELPER METHODS
 
-// Count how many tests we have
+/**
+ * Counts test results from XML files in Maven/Gradle/Python locations
+ * @return Map with total, passed, failed, skipped test counts
+ * Usage: def testCounts = countTests(); println "Total: ${testCounts.total}"
+ */
 def countTests() {
     def total = 0, failed = 0, skipped = 0
     
     try {
-        // Look for test XML files in common places
+        // Look for test XML files in common build tool locations
         def testFiles = []
         
-        // Maven tests
+        // Maven tests in target/surefire-reports/*.xml
         if (fileExists('target/surefire-reports')) {
             testFiles.addAll(findFiles(glob: 'target/surefire-reports/*.xml'))
         }
         
-        // Gradle tests  
+        // Gradle tests in build/test-results/test/*.xml
         if (fileExists('build/test-results/test')) {
             testFiles.addAll(findFiles(glob: 'build/test-results/test/*.xml'))
         }
         
-        // Python tests
+        // Python pytest results in test-results.xml
         if (fileExists('test-results.xml')) {
             testFiles.add([path: 'test-results.xml'])
         }
         
-        // Read each file and count tests
+        // Parse each XML file and extract test counts
         testFiles.each { file ->
             try {
                 def xml = readFile(file.path)
@@ -214,18 +242,22 @@ def countTests() {
     return [total: total, passed: passed, failed: failed, skipped: skipped]
 }
 
-// Count lint issues
+/**
+ * Counts lint violations from checkstyle (Java) or pylint (Python) report files
+ * @return Integer count of lint violations found
+ * Usage: def violations = countLintIssues(); println "Found ${violations} violations"
+ */
 def countLintIssues() {
     def count = 0
     
     try {
-        // Java checkstyle
+        // Java checkstyle violations in target/checkstyle-result.xml
         if (fileExists('target/checkstyle-result.xml')) {
             def xml = readFile('target/checkstyle-result.xml')
             count = (xml =~ /<error/).size()
         }
         
-        // Python pylint
+        // Python pylint violations in pylint-report.txt
         if (fileExists('pylint-report.txt')) {
             def report = readFile('pylint-report.txt')
             count = report.split('\n').findAll { it.contains(':') && !it.contains('*') }.size()
@@ -238,7 +270,13 @@ def countLintIssues() {
     return count
 }
 
-// Get a number from XML (like tests="5")
+/**
+ * Extracts numeric value from XML attribute (e.g., tests="5" returns 5)
+ * @param xml String containing XML content
+ * @param attribute Name of XML attribute to extract number from
+ * @return Integer value found in attribute, or 0 if not found
+ * Usage: def testCount = getNumber(xmlContent, 'tests')
+ */
 def getNumber(String xml, String attribute) {
     try {
         def pattern = "${attribute}=\"(\\d+)\""
@@ -252,7 +290,17 @@ def getNumber(String xml, String attribute) {
     return 0
 }
 
-// Make the email text
+/**
+ * Creates formatted plain text email body with build summary
+ * @param jobName Jenkins job name
+ * @param buildNumber Jenkins build number
+ * @param status Overall build status (SUCCESS/FAILURE/UNSTABLE)
+ * @param stages Map of stage names and results
+ * @param tests Map with test counts (total, passed, failed, skipped)
+ * @param lintCount Number of lint violations
+ * @return String formatted email body
+ * Usage: def body = makeEmailBody("MyJob", "123", "SUCCESS", stages, tests, 5)
+ */
 def makeEmailBody(String jobName, String buildNumber, String status, Map stages, Map tests, int lintCount) {
     def stageText = ""
     stages.each { name, result ->

@@ -1,3 +1,9 @@
+/**
+ * Main method to run code quality linting for Java or Python projects
+ * @param config Pipeline configuration map containing project language and lint tool settings
+ * @return String result: 'SUCCESS' (no violations), 'UNSTABLE' (violations found), 'FAILED' (critical error)
+ * Usage: def lintResult = lint_utils.runLint(config)
+ */
 def runLint(Map config = [:]) {
     logger.info("Starting lint")
     
@@ -19,6 +25,7 @@ def runLint(Map config = [:]) {
                 return 'FAILED'
         }
 
+        // Process lint results and set appropriate build status
         if (result == true) {
             logger.info("Lint completed successfully")
             return 'SUCCESS'

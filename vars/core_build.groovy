@@ -1,3 +1,10 @@
+/**
+ * Main method to build projects for different programming languages
+ * @param language Project language ('java-maven', 'java-gradle', or 'python')
+ * @param config Pipeline configuration map (optional)
+ * @return Boolean true if build succeeds, false if it fails
+ * Usage: def success = core_build.buildLanguages('java-maven', config)
+ */
 def buildLanguages(String language, Map config = [:]) {
     logger.info("Starting the build process")
 
@@ -11,6 +18,13 @@ def buildLanguages(String language, Map config = [:]) {
     }
 }
 
+/**
+ * Builds Java applications using Maven or Gradle build tools
+ * @param buildTool Build tool to use ('maven' or 'gradle')
+ * @param config Pipeline configuration map
+ * @return Boolean true if build succeeds, false if it fails
+ * Usage: def success = buildJavaApp('maven', config)
+ */
 def buildJavaApp(String buildTool, Map config = [:]){
     logger.info("Building Java Project with ${buildTool}")
 
@@ -41,6 +55,11 @@ def buildMavenApp(Map config = [:]){
     }
 }
 
+/**
+ * Executes Maven build command (mvn compile package)
+ * @param config Pipeline configuration map
+ * @return Boolean true when build completes successfully
+ */
 private Boolean task_buildMavenApp(Map config) {
     logger.info("Maven build logic execution")
     bat script: MavenScript.buildCommand()
@@ -81,15 +100,28 @@ def buildPythonApp(Map config = [:]) {
     
 }
 
+/**
+ * Executes Python build command (python setup.py build)
+ * @param config Pipeline configuration map
+ * @return Boolean true when build completes successfully
+ */
 private Boolean task_buildPythonApp(Map config) {
     logger.info("Python build logic execution")
     bat script: PythonScript.buildCommand()
     // sh script: PythonScript.buildCommand()  // Linux equivalent
-    logger.info("No recognized build file found")
+    logger.info("Python build executed successfully")
     return true
 }
 
 
+/**
+ * Installs project dependencies for different programming languages and build tools
+ * @param language Programming language ('java' or 'python')
+ * @param buildTool Build tool ('maven', 'gradle', or 'pip')
+ * @param config Pipeline configuration map
+ * @return Boolean true if installation succeeds, false if it fails
+ * Usage: def success = core_build.installDependencies('java', 'maven', config)
+ */
 def installDependencies(String language, String buildTool, Map config = [:]){
     logger.info("Installing the dependencies for the ${language} with ${buildTool}")
 

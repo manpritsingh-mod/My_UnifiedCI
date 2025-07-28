@@ -1,3 +1,11 @@
+/**
+ * Checks out source code from Git repository or uses default SCM configuration
+ * @param repoURL Git repository URL (optional, uses SCM if empty)
+ * @param branch Git branch to checkout (optional, defaults to 'main')
+ * @param config Pipeline configuration map containing branch info
+ * @return Boolean true if checkout succeeds, false if it fails
+ * Usage: def success = core_github.checkout('https://github.com/user/repo.git', 'develop')
+ */
 def checkout(String repoURL = '', String branch = '', Map config = [:]) {
     if (!repoURL?.trim()) {
         logger.warning("No repository URL provided. Using default SCM checkout")
@@ -24,6 +32,12 @@ def checkout(String repoURL = '', String branch = '', Map config = [:]) {
     }
 }
 
+/**
+ * Validates if a Git repository is accessible by running git ls-remote command
+ * @param repoUrl Git repository URL to validate
+ * @return Boolean true if repository is accessible, false if not
+ * Usage: def isValid = core_github.validateRepoAccess('https://github.com/user/repo.git')
+ */
 def validateRepoAccess(String repoUrl) {
     try {
         // Use GitHubManager to get validation configuration
@@ -34,7 +48,7 @@ def validateRepoAccess(String repoUrl) {
             return false
         }
         
-        def timeout = 5 // seconds
+        def timeout = 5 // seconds - prevent hanging on unreachable repos
         def status = bat(
             script: validationResult.command,
             returnStatus: true,

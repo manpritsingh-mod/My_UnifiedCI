@@ -1,3 +1,9 @@
+/**
+ * Java Maven Pipeline Template - Executes complete Maven-based Java CI/CD pipeline
+ * Handles Maven project build, test, lint, and reporting with comprehensive error handling
+ * @param config Pipeline configuration map (optional, uses defaults if not provided)
+ * Usage: javaMaven_template() or javaMaven_template([project_language: 'java-maven', runLintTests: false])
+ */
 def call(Map config = [:]) {
     logger.info("Starting Java Maven Template Pipeline")
     
@@ -7,7 +13,7 @@ def call(Map config = [:]) {
         config = core_utils.getDefaultConfig()
     }
     
-    // Initialize stage results tracking
+    // Initialize stage results tracking for email reporting
     def stageResults = [:]
     
     // Execute Maven-specific pipeline stages
