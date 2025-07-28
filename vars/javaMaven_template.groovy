@@ -31,7 +31,9 @@ def call(Map config = [:]) {
                 logger.info("SETUP STAGE")
                 core_utils.setupProjectEnvironment(config.project_language, config)
                 bat 'java -version'
+                // sh 'java -version'  // Linux equivalent
                 bat 'mvn -version'
+                // sh 'mvn -version'   // Linux equivalent
                 stageResults['Setup'] = 'SUCCESS'
             } catch (Exception e) {
                 logger.error("Setup stage failed: ${e.getMessage()}")

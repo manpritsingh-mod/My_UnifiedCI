@@ -43,8 +43,8 @@ def buildMavenApp(Map config = [:]){
 
 private Boolean task_buildMavenApp(Map config) {
     logger.info("Maven build logic execution")
-    // sh script: MavenScript.buildCommand()
     bat script: MavenScript.buildCommand()
+    // sh script: MavenScript.buildCommand()  // Linux equivalent
     logger.info("Maven build executed successfully")
     return true
 }
@@ -63,8 +63,8 @@ def buildGradleApp(Map config = [:]){
 
 private Boolean task_buildGradleApp(Map config = [:]){
     logger.info("Gradle build logic execution")
-    // sh script: GradleScript.buildCommand()
     bat script: GradleScript.buildCommand()
+    // sh script: GradleScript.buildCommand()  // Linux equivalent
     logger.info("Gradle build executed successfully")
     return true
 }
@@ -83,8 +83,8 @@ def buildPythonApp(Map config = [:]) {
 
 private Boolean task_buildPythonApp(Map config) {
     logger.info("Python build logic execution")
-    // sh script: PythonScript.buildCommand()
     bat script: PythonScript.buildCommand()
+    // sh script: PythonScript.buildCommand()  // Linux equivalent
     logger.info("No recognized build file found")
     return true
 }
@@ -131,8 +131,8 @@ def installJavaDependencies(String buildTool, Map config = [:]){
 def task_mavenDependencies(Map config = [:]){
     logger.info("Maven Dependencies Logic")
 
-    // sh script: MavenScript.installDependenciesCommand()
     bat script: MavenScript.installDependenciesCommand()
+    // sh script: MavenScript.installDependenciesCommand()  // Linux equivalent
 
     logger.info("Maven Dependencies installed successfully")
     return true
@@ -141,8 +141,8 @@ def task_mavenDependencies(Map config = [:]){
 def task_gradleDependencies(Map config = [:]){
     logger.info("Gradle Dependencies Logic")
 
-    // sh script: GradleScript.installDependenciesCommand()
     bat script: GradleScript.installDependenciesCommand()
+    // sh script: GradleScript.installDependenciesCommand()  // Linux equivalent
 
     logger.info("Gradle Dependencies installed successfully")
     return true
@@ -164,8 +164,8 @@ def task_pythonDependencies(Map config = [:]){
     logger.info("Python Dependencies logic")
 
     if(fileExists('requirements.txt')){
-        // sh script: PythonScript.installDependenciesCommand()
         bat script: PythonScript.installDependenciesCommand()
+        // sh script: PythonScript.installDependenciesCommand()  // Linux equivalent
     }
 
     logger.info("Python Dependencies installed successfully")

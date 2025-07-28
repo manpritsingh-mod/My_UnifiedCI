@@ -50,6 +50,7 @@ private def runJavaUnitTest(String language, String testTool, Map config) {
 
     try {
         bat script: command
+        // sh script: command  // Linux equivalent
         logger.info("Unit tests passed successfully")
         return true
     } catch (Exception e) {
@@ -71,6 +72,7 @@ private def runPythonUnitTest(String testTool, Map config) {
     
     try {
         bat script: PythonScript.testCommand(testTool)
+        // sh script: PythonScript.testCommand(testTool)  // Linux equivalent
         logger.info("Python unit tests passed successfully")
         return true
     } catch (Exception e) {

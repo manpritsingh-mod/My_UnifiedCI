@@ -32,7 +32,9 @@ def call(Map config = [:]) {
                 core_utils.setupProjectEnvironment(config.project_language, config)
                 // Use bat for Windows compatibility
                 bat 'java -version'
+                // sh 'java -version'     // Linux equivalent
                 bat './gradlew --version'
+                // sh './gradlew --version' // Linux equivalent
                 stageResults['Setup'] = 'SUCCESS'
             } catch (Exception e) {
                 logger.error("Setup stage failed: ${e.getMessage()}")

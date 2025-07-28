@@ -29,6 +29,7 @@ def makeAllureReport() {
         // Create folder for test results (Windows safe way)
         if (!fileExists('allure-results')) {
             bat 'mkdir allure-results'
+            // sh 'mkdir -p allure-results' // Linux equivalent
         }
         
         // Copy all test files we can find
@@ -73,6 +74,7 @@ def copyAllTestFiles() {
             files.each { file ->
                 try {
                     bat "copy \"${file.path}\" allure-results\\"
+                    // sh "cp \"${file.path}\" allure-results/" // Linux equivalent
                     foundAny = true
                     logger.info("Copied Maven test: ${file.name}")
                 } catch (Exception e) {
@@ -87,6 +89,7 @@ def copyAllTestFiles() {
             files.each { file ->
                 try {
                     bat "copy \"${file.path}\" allure-results\\"
+                    // sh "cp \"${file.path}\" allure-results/" // Linux equivalent
                     foundAny = true
                     logger.info("Copied Gradle test: ${file.name}")
                 } catch (Exception e) {
@@ -99,6 +102,7 @@ def copyAllTestFiles() {
         if (fileExists('test-results.xml')) {
             try {
                 bat "copy test-results.xml allure-results\\"
+                // sh "cp test-results.xml allure-results/" // Linux equivalent
                 foundAny = true
                 logger.info("Copied Python test: test-results.xml")
             } catch (Exception e) {

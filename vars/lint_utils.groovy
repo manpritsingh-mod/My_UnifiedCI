@@ -50,6 +50,7 @@ private def runJavaLint(String language, String lintTool, Map config) {
 
     try {
         bat script: command
+        // sh script: command  // Linux equivalent
         logger.info("Lint passed with no violations")
         return true
     } catch (Exception e) {
@@ -71,6 +72,7 @@ private def runPythonLint(String lintTool, Map config) {
     
     try {
         bat script: PythonScript.lintCommand(lintTool)
+        // sh script: PythonScript.lintCommand(lintTool)  // Linux equivalent
         logger.info("Python lint passed with no violations")
         return true
     } catch (Exception e) {

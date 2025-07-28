@@ -38,14 +38,17 @@ def call(Map config = [:]) {
                 // Try to find Python
                 try {
                     bat 'python --version'
+                    // sh 'python --version'  // Linux equivalent
                     pythonCmd = 'python'
                 } catch (Exception e1) {
                     try {
                         bat 'python3 --version'
+                        // sh 'python3 --version' // Linux equivalent
                         pythonCmd = 'python3'
                     } catch (Exception e2) {
                         try {
                             bat 'py --version'
+                            // sh 'python3 --version' // Linux equivalent (py not available on Linux)
                             pythonCmd = 'py'
                         } catch (Exception e3) {
                             throw new Exception("Python not found! Please install Python and add it to PATH.")
@@ -56,14 +59,17 @@ def call(Map config = [:]) {
                 // Try to find pip
                 try {
                     bat 'pip --version'
+                    // sh 'pip --version'     // Linux equivalent
                     pipCmd = 'pip'
                 } catch (Exception e1) {
                     try {
                         bat 'pip3 --version'
+                        // sh 'pip3 --version'   // Linux equivalent
                         pipCmd = 'pip3'
                     } catch (Exception e2) {
                         try {
                             bat "${pythonCmd} -m pip --version"
+                            // sh "${pythonCmd} -m pip --version" // Linux equivalent
                             pipCmd = "${pythonCmd} -m pip"
                         } catch (Exception e3) {
                             throw new Exception("Pip not found! Please install pip.")
