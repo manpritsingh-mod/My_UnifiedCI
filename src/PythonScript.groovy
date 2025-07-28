@@ -1,27 +1,37 @@
 class PythonScript {
     static String buildCommand() {
-        return "python setup.py build"
+        def pythonCmd = System.getenv('PYTHON_CMD') ?: 'python'
+        return "${pythonCmd} setup.py build"
     }
 
     static String installDependenciesCommand() {
-        return "pip install -r requirements.txt"
+        def pipCmd = System.getenv('PIP_CMD') ?: 'pip'
+        return "${pipCmd} install -r requirements.txt"
     }
     
-    static String testCommand(String testTool = 'pytest') { // doubt in this here how to give dynamically??? I have give static value for now!!
+    static String testCommand(String testTool = 'pytest') {
+        def pythonCmd = System.getenv('PYTHON_CMD') ?: 'python'
         switch(testTool) {
-            case 'pytest': return "pytest --verbose --tb=short"
-            case 'unittest': return "python -m unittest discover -v"
-            default: throw new IllegalArgumentException("Unknown test tool: $testTool")
+            case 'pytest': 
+                return "${pythonCmd} -m pytest --verbose --tb=short --junit-xml=test-results.xml"
+            case 'unittest': 
+                return "${pythonCmd} -m unittest discover -v"
+            default: 
+                throw new IllegalArgumentException("Unknown test tool: $testTool")
         }
     }
     
-    static String lintCommand(String lintTool = 'pylint') { // doubt in this here how to give dynamically??? I have give static value for now!!
+    static String lintCommand(String lintTool = 'pylint') {
+        def pythonCmd = System.getenv('PYTHON_CMD') ?: 'python'
         switch(lintTool) {
-            case 'pylint': return "pylint **/*.py --output-format=text"
-            case 'flake8': return "flake8 ."
-            case 'black': return "black --check ."
-            default: throw new IllegalArgumentException("Unknown lint tool: $lintTool")
+            case 'pylint': 
+                return "${pythonCmd} -m pylint src/**/*.py --output-format=text > pylint-report.txt 2>&1"
+            case 'flake8': 
+                return "${pythonCmd} -m flake8 src/ > flake8-report.txt 2>&1"
+            case 'black': 
+                return "${pythonCmd} -m black --check src/"
+            default: 
+                throw new IllegalArgumentException("Unknown lint tool: $lintTool")
         }
     }
-    
 }
