@@ -95,22 +95,7 @@ def call(Map config = [:]) {
         script {
             def parallelTests = [:]
             
-            // Add Unit Test to parallel execution if enabled
-            if (core_utils.shouldExecuteStage('unittest', config)) {
-                parallelTests['Unit Test'] = {
-                    logger.info("Running Unit Tests")
-                    def testResult = core_test.runUnitTest(config)
-                    env.UNIT_TEST_RESULT = testResult
-                    stageResults['Unit Test'] = testResult
-                    logger.info("Unit test stage completed with result: ${testResult}")
-                }
-            } else {
-                logger.info("Unit testing is disabled - skipping")
-                env.UNIT_TEST_RESULT = 'SKIPPED'
-                stageResults['Unit Test'] = 'SKIPPED'
-            }
-            
-            // Add Functional Tests with nested parallel execution if any functional test is enabled
+            // Add Functional Tests with nested parallel execution as first parallel branch
             if (core_utils.shouldExecuteStage('functionaltest', config) || 
                 core_utils.shouldExecuteStage('smoketest', config) || 
                 core_utils.shouldExecuteStage('sanitytest', config) || 
@@ -122,7 +107,7 @@ def call(Map config = [:]) {
                     
                     // Add Smoke Tests to functional tests parallel execution
                     if (core_utils.shouldExecuteStage('smoketest', config)) {
-                        functionalTests['Smoke Tests'] = {
+                        functionalTests['Smoke'] = {
                             logger.info("Running Smoke Tests")
                             bat script: PythonScript.smokeTestCommand()
                             // sh script: PythonScript.smokeTestCommand()  // Linux equivalent
@@ -138,7 +123,7 @@ def call(Map config = [:]) {
                     
                     // Add Sanity Tests to functional tests parallel execution
                     if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                        functionalTests['Sanity Tests'] = {
+                        functionalTests['Sanity'] = {
                             logger.info("Running Sanity Tests")
                             bat script: PythonScript.sanityTestCommand()
                             // sh script: PythonScript.sanityTestCommand()  // Linux equivalent
@@ -154,7 +139,7 @@ def call(Map config = [:]) {
                     
                     // Add Regression Tests to functional tests parallel execution
                     if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                        functionalTests['Regression Tests'] = {
+                        functionalTests['Regression'] = {
                             logger.info("Running Regression Tests")
                             bat script: PythonScript.regressionTestCommand()
                             // sh script: PythonScript.regressionTestCommand()  // Linux equivalent
@@ -182,6 +167,21 @@ def call(Map config = [:]) {
                 logger.info("Functional testing is disabled - skipping")
                 env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
                 stageResults['Functional Tests'] = 'SKIPPED'
+            }
+            
+            // Add Unit Test as second parallel branch
+            if (core_utils.shouldExecuteStage('unittest', config)) {
+                parallelTests['Unit Test'] = {
+                    logger.info("Running Unit Tests")
+                    def testResult = core_test.runUnitTest(config)
+                    env.UNIT_TEST_RESULT = testResult
+                    stageResults['Unit Test'] = testResult
+                    logger.info("Unit test stage completed with result: ${testResult}")
+                }
+            } else {
+                logger.info("Unit testing is disabled - skipping")
+                env.UNIT_TEST_RESULT = 'SKIPPED'
+                stageResults['Unit Test'] = 'SKIPPED'
             }
             
             // Execute parallel tests if any are enabled
