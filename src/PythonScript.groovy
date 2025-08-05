@@ -7,7 +7,7 @@ class PythonScript {
         return "pip install -r requirements.txt"
     }
     
-    static String testCommand(String testTool = 'pytest') { // doubt in this here how to give dynamically??? I have give static value for now!!
+    static String testCommand(String testTool = 'pytest') {
         switch(testTool) {
             case 'pytest': return "pytest --verbose --tb=short"
             case 'unittest': return "python -m unittest discover -v"
@@ -15,7 +15,7 @@ class PythonScript {
         }
     }
     
-    static String lintCommand(String lintTool = 'pylint') { // doubt in this here how to give dynamically??? I have give static value for now!!
+    static String lintCommand(String lintTool = 'pylint') {
         switch(lintTool) {
             case 'pylint': return "pylint **/*.py --output-format=text"
             case 'flake8': return "flake8 ."
@@ -24,4 +24,25 @@ class PythonScript {
         }
     }
     
+    // Version check commands
+    static String pythonVersionCommand() {
+        return "python --version"
+    }
+    
+    static String pipVersionCommand() {
+        return "pip --version"
+    }
+    
+    // Functional test commands
+    static String smokeTestCommand() {
+        return "pytest tests/smoke/ -v --tb=short"
+    }
+    
+    static String sanityTestCommand() {
+        return "pytest tests/sanity/ -v --tb=short"
+    }
+    
+    static String regressionTestCommand() {
+        return "pytest tests/regression/ -v --tb=short"
+    }
 }

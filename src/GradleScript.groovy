@@ -55,4 +55,26 @@ class GradleScript {
     static String installDependenciesCommand() {
         return "./gradlew dependencies"
     }
+    
+    // Version check commands
+    static String javaVersionCommand() {
+        return "java -version"
+    }
+    
+    static String gradleVersionCommand() {
+        return "./gradlew --version"
+    }
+    
+    // Functional test commands with Gradle profiles
+    static String smokeTestCommand() {
+        return "./gradlew test -Psmoke"
+    }
+    
+    static String sanityTestCommand() {
+        return "./gradlew test -Psanity"
+    }
+    
+    static String regressionTestCommand() {
+        return "./gradlew test -Pregression"
+    }
 }

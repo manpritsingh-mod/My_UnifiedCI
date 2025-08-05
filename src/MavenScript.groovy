@@ -54,6 +54,28 @@ class MavenScript {
     static String installDependenciesCommand() {
         return "mvn dependency:resolve -B"
     }
+    
+    // Version check commands
+    static String javaVersionCommand() {
+        return "java -version"
+    }
+    
+    static String mavenVersionCommand() {
+        return "mvn -version"
+    }
+    
+    // Functional test commands with Maven profiles
+    static String smokeTestCommand() {
+        return "mvn test -Psmoke"
+    }
+    
+    static String sanityTestCommand() {
+        return "mvn test -Psanity"
+    }
+    
+    static String regressionTestCommand() {
+        return "mvn test -Pregression"
+    }
 }
 
 

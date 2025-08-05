@@ -29,10 +29,10 @@ def call(Map config = [:]) {
         script {
             logger.info("SETUP STAGE")
             core_utils.setupProjectEnvironment(config.project_language, config)
-            bat 'java -version'
-            // sh 'java -version'  // Linux equivalent
-            bat 'mvn -version'
-            // sh 'mvn -version'   // Linux equivalent
+            bat script: MavenScript.javaVersionCommand()
+            // sh script: MavenScript.javaVersionCommand()  // Linux equivalent
+            bat script: MavenScript.mavenVersionCommand()
+            // sh script: MavenScript.mavenVersionCommand()   // Linux equivalent
             stageResults['Setup'] = 'SUCCESS'
         }
     }
@@ -71,20 +71,67 @@ def call(Map config = [:]) {
         }
     }
     
-    stage('Unit Test') {
-        if (core_utils.shouldExecuteStage('unittest', config)) {
-            script {
-                logger.info("UNIT-TEST STAGE")
-                def testResult = core_test.runUnitTest(config)
-                env.UNIT_TEST_RESULT = testResult
-                stageResults['Unit Test'] = testResult
-                logger.info("Unit test stage completed with result: ${testResult}")
+    stage('Test Execution') {
+        parallel {
+            stage('Unit Test') {
+                when {
+                    expression { core_utils.shouldExecuteStage('unittest', config) }
+                }
+                steps {
+                    script {
+                        logger.info("Running Unit Tests")
+                        def testResult = core_test.runUnitTest(config)
+                        env.UNIT_TEST_RESULT = testResult
+                        stageResults['Unit Test'] = testResult
+                        logger.info("Unit test stage completed with result: ${testResult}")
+                    }
+                }
             }
-        } else {
-            script {
-                logger.info("Unit testing is disabled - skipping")
-                env.UNIT_TEST_RESULT = 'SKIPPED'
-                stageResults['Unit Test'] = 'SKIPPED'
+            stage('Functional Tests') {
+                when {
+                    expression { core_utils.shouldExecuteStage('functionaltest', config) }
+                }
+                steps {
+                    script {
+                        logger.info("Running Functional Tests")
+                        
+                        // Run Smoke Tests
+                        logger.info("Running Smoke Tests")
+                        bat script: MavenScript.smokeTestCommand()
+                        // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
+                        
+                        // Run Sanity Tests
+                        logger.info("Running Sanity Tests")
+                        bat script: MavenScript.sanityTestCommand()
+                        // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
+                        
+                        // Run Regression Tests
+                        logger.info("Running Regression Tests")
+                        bat script: MavenScript.regressionTestCommand()
+                        // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
+                        
+                        env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
+                        stageResults['Functional Tests'] = 'SUCCESS'
+                        logger.info("Functional Tests completed successfully")
+                    }
+                }
+            }
+        }
+        post {
+            always {
+                script {
+                    // Set default values if stages were skipped
+                    if (!env.UNIT_TEST_RESULT) {
+                        env.UNIT_TEST_RESULT = 'SKIPPED'
+                        stageResults['Unit Test'] = 'SKIPPED'
+                        logger.info("Unit testing was disabled - skipped")
+                    }
+                    if (!env.FUNCTIONAL_TEST_RESULT) {
+                        env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
+                        stageResults['Functional Tests'] = 'SKIPPED'
+                        logger.info("Functional testing was disabled - skipped")
+                    }
+                }
             }
         }
     }
