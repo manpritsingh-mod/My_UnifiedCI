@@ -85,50 +85,64 @@ def call(Map config = [:]) {
                 stageResults['Unit Test'] = 'SKIPPED'
             }
             
-            // Add individual functional tests as separate parallel branches
-            if (core_utils.shouldExecuteStage('smoketest', config)) {
-                parallelTests['Smoke Tests'] = {
-                    logger.info("Running Smoke Tests")
-                    bat script: GradleScript.smokeTestCommand()
-                    // sh script: GradleScript.smokeTestCommand()  // Linux equivalent
-                    env.SMOKE_TEST_RESULT = 'SUCCESS'
-                    stageResults['Smoke Tests'] = 'SUCCESS'
-                    logger.info("Smoke Tests completed successfully")
+            // Add Functional Tests as second parallel branch with serial execution inside
+            if (core_utils.shouldExecuteStage('functionaltest', config) || 
+                core_utils.shouldExecuteStage('smoketest', config) || 
+                core_utils.shouldExecuteStage('sanitytest', config) || 
+                core_utils.shouldExecuteStage('regressiontest', config)) {
+                
+                parallelTests['Functional Tests'] = {
+                    logger.info("Starting Functional Tests (Serial Execution)")
+                    
+                    // Run Smoke Tests first (if enabled)
+                    if (core_utils.shouldExecuteStage('smoketest', config)) {
+                        logger.info("Running Smoke Tests")
+                        bat script: GradleScript.smokeTestCommand()
+                        // sh script: GradleScript.smokeTestCommand()  // Linux equivalent
+                        env.SMOKE_TEST_RESULT = 'SUCCESS'
+                        stageResults['Smoke Tests'] = 'SUCCESS'
+                        logger.info("Smoke Tests completed successfully")
+                    } else {
+                        logger.info("Smoke Tests are disabled - skipping")
+                        env.SMOKE_TEST_RESULT = 'SKIPPED'
+                        stageResults['Smoke Tests'] = 'SKIPPED'
+                    }
+                    
+                    // Run Sanity Tests second (if enabled)
+                    if (core_utils.shouldExecuteStage('sanitytest', config)) {
+                        logger.info("Running Sanity Tests")
+                        bat script: GradleScript.sanityTestCommand()
+                        // sh script: GradleScript.sanityTestCommand()  // Linux equivalent
+                        env.SANITY_TEST_RESULT = 'SUCCESS'
+                        stageResults['Sanity Tests'] = 'SUCCESS'
+                        logger.info("Sanity Tests completed successfully")
+                    } else {
+                        logger.info("Sanity Tests are disabled - skipping")
+                        env.SANITY_TEST_RESULT = 'SKIPPED'
+                        stageResults['Sanity Tests'] = 'SKIPPED'
+                    }
+                    
+                    // Run Regression Tests third (if enabled)
+                    if (core_utils.shouldExecuteStage('regressiontest', config)) {
+                        logger.info("Running Regression Tests")
+                        bat script: GradleScript.regressionTestCommand()
+                        // sh script: GradleScript.regressionTestCommand()  // Linux equivalent
+                        env.REGRESSION_TEST_RESULT = 'SUCCESS'
+                        stageResults['Regression Tests'] = 'SUCCESS'
+                        logger.info("Regression Tests completed successfully")
+                    } else {
+                        logger.info("Regression Tests are disabled - skipping")
+                        env.REGRESSION_TEST_RESULT = 'SKIPPED'
+                        stageResults['Regression Tests'] = 'SKIPPED'
+                    }
+                    
+                    env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
+                    logger.info("Functional Tests completed (Serial Execution)")
                 }
             } else {
-                logger.info("Smoke Tests are disabled - skipping")
-                env.SMOKE_TEST_RESULT = 'SKIPPED'
-                stageResults['Smoke Tests'] = 'SKIPPED'
-            }
-            
-            if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                parallelTests['Sanity Tests'] = {
-                    logger.info("Running Sanity Tests")
-                    bat script: GradleScript.sanityTestCommand()
-                    // sh script: GradleScript.sanityTestCommand()  // Linux equivalent
-                    env.SANITY_TEST_RESULT = 'SUCCESS'
-                    stageResults['Sanity Tests'] = 'SUCCESS'
-                    logger.info("Sanity Tests completed successfully")
-                }
-            } else {
-                logger.info("Sanity Tests are disabled - skipping")
-                env.SANITY_TEST_RESULT = 'SKIPPED'
-                stageResults['Sanity Tests'] = 'SKIPPED'
-            }
-            
-            if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                parallelTests['Regression Tests'] = {
-                    logger.info("Running Regression Tests")
-                    bat script: GradleScript.regressionTestCommand()
-                    // sh script: GradleScript.regressionTestCommand()  // Linux equivalent
-                    env.REGRESSION_TEST_RESULT = 'SUCCESS'
-                    stageResults['Regression Tests'] = 'SUCCESS'
-                    logger.info("Regression Tests completed successfully")
-                }
-            } else {
-                logger.info("Regression Tests are disabled - skipping")
-                env.REGRESSION_TEST_RESULT = 'SKIPPED'
-                stageResults['Regression Tests'] = 'SKIPPED'
+                logger.info("Functional testing is disabled - skipping")
+                env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
+                stageResults['Functional Tests'] = 'SKIPPED'
             }
             
             // Execute parallel tests if any are enabled

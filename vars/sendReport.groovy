@@ -25,7 +25,7 @@ def makeAllureReport() {
 
     try {
         if (!fileExists('allure-results')) {
-            sh 'mkdir -p allure-results'
+            bat 'mkdir -p allure-results'
         }
 
         // Copy test result files from different build tool folders to allure-results
@@ -58,7 +58,7 @@ def copyAllTestFiles() {
             def files = findFiles(glob: 'target/surefire-reports/*.xml')
             files.each { file ->
                 try {
-                    sh "cp \"${file.path}\" allure-results/" 
+                    bat "cp \"${file.path}\" allure-results/" 
                     foundAny = true
                     logger.info("Copied Maven test: ${file.name}")
                 } catch (Exception e) {
@@ -72,7 +72,7 @@ def copyAllTestFiles() {
             def files = findFiles(glob: 'build/test-results/test/*.xml')
             files.each { file ->
                 try {
-                    sh "cp \"${file.path}\" allure-results/"
+                    bat "cp \"${file.path}\" allure-results/"
                     foundAny = true
                     logger.info("Copied Gradle test: ${file.name}")
                 } catch (Exception e) {
@@ -83,7 +83,7 @@ def copyAllTestFiles() {
         // Look for Python pytest file test-results.xml
         if (fileExists('test-results.xml')) {
             try {
-                sh "cp test-results.xml allure-results/"
+                bat "cp test-results.xml allure-results/"
                 foundAny = true
                 logger.info("Copied Python test: test-results.xml")
             } catch (Exception e) {
