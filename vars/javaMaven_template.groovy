@@ -90,62 +90,62 @@ def call(Map config = [:]) {
                 stageResults['Unit Test'] = 'SKIPPED'
             }
             
-            // Add Functional Tests as second parallel branch with serial execution inside
+            // Add Serial Functional Tests as second parallel branch
             if (core_utils.shouldExecuteStage('functionaltest', config) || 
                 core_utils.shouldExecuteStage('smoketest', config) || 
                 core_utils.shouldExecuteStage('sanitytest', config) || 
                 core_utils.shouldExecuteStage('regressiontest', config)) {
                 
-                parallelTests['Functional Tests'] = {
-                    logger.info("Starting Functional Tests (Serial Execution)")
+                parallelTests['Smoke → Sanity → Regression'] = {
+                    logger.info("Starting Serial Functional Tests")
                     
-                    // Run Smoke Tests first (if enabled)
+                    // Stage 1: Smoke Tests
                     if (core_utils.shouldExecuteStage('smoketest', config)) {
-                        logger.info("Running Smoke Tests")
+                        logger.info("Stage 1: Running Smoke Tests")
                         bat script: MavenScript.smokeTestCommand()
                         // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
                         env.SMOKE_TEST_RESULT = 'SUCCESS'
                         stageResults['Smoke Tests'] = 'SUCCESS'
                         logger.info("Smoke Tests completed successfully")
                     } else {
-                        logger.info("Smoke Tests are disabled - skipping")
+                        logger.info("Stage 1: Smoke Tests are disabled - skipping")
                         env.SMOKE_TEST_RESULT = 'SKIPPED'
                         stageResults['Smoke Tests'] = 'SKIPPED'
                     }
                     
-                    // Run Sanity Tests second (if enabled)
+                    // Stage 2: Sanity Tests (runs after Smoke)
                     if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                        logger.info("Running Sanity Tests")
+                        logger.info("Stage 2: Running Sanity Tests")
                         bat script: MavenScript.sanityTestCommand()
                         // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
                         env.SANITY_TEST_RESULT = 'SUCCESS'
                         stageResults['Sanity Tests'] = 'SUCCESS'
                         logger.info("Sanity Tests completed successfully")
                     } else {
-                        logger.info("Sanity Tests are disabled - skipping")
+                        logger.info("Stage 2: Sanity Tests are disabled - skipping")
                         env.SANITY_TEST_RESULT = 'SKIPPED'
                         stageResults['Sanity Tests'] = 'SKIPPED'
                     }
                     
-                    // Run Regression Tests third (if enabled)
+                    // Stage 3: Regression Tests (runs after Sanity)
                     if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                        logger.info("Running Regression Tests")
+                        logger.info("Stage 3: Running Regression Tests")
                         bat script: MavenScript.regressionTestCommand()
                         // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
                         env.REGRESSION_TEST_RESULT = 'SUCCESS'
                         stageResults['Regression Tests'] = 'SUCCESS'
                         logger.info("Regression Tests completed successfully")
                     } else {
-                        logger.info("Regression Tests are disabled - skipping")
+                        logger.info("Stage 3: Regression Tests are disabled - skipping")
                         env.REGRESSION_TEST_RESULT = 'SKIPPED'
                         stageResults['Regression Tests'] = 'SKIPPED'
                     }
                     
                     env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                    logger.info("Functional Tests completed (Serial Execution)")
+                    logger.info("Serial Functional Tests completed: Smoke → Sanity → Regression")
                 }
             } else {
-                logger.info("Functional testing is disabled - skipping")
+                logger.info("All functional tests are disabled - skipping")
                 env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
                 stageResults['Functional Tests'] = 'SKIPPED'
             }
