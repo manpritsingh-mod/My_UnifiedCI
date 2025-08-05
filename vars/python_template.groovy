@@ -95,81 +95,7 @@ def call(Map config = [:]) {
         script {
             def parallelTests = [:]
             
-            // Add Functional Tests with nested parallel execution as first parallel branch
-            if (core_utils.shouldExecuteStage('functionaltest', config) || 
-                core_utils.shouldExecuteStage('smoketest', config) || 
-                core_utils.shouldExecuteStage('sanitytest', config) || 
-                core_utils.shouldExecuteStage('regressiontest', config)) {
-                
-                parallelTests['Functional Tests'] = {
-                    logger.info("Starting Functional Tests")
-                    def functionalTests = [:]
-                    
-                    // Add Smoke Tests to functional tests parallel execution
-                    if (core_utils.shouldExecuteStage('smoketest', config)) {
-                        functionalTests['Smoke'] = {
-                            logger.info("Running Smoke Tests")
-                            bat script: PythonScript.smokeTestCommand()
-                            // sh script: PythonScript.smokeTestCommand()  // Linux equivalent
-                            env.SMOKE_TEST_RESULT = 'SUCCESS'
-                            stageResults['Smoke Tests'] = 'SUCCESS'
-                            logger.info("Smoke Tests completed successfully")
-                        }
-                    } else {
-                        logger.info("Smoke Tests are disabled - skipping")
-                        env.SMOKE_TEST_RESULT = 'SKIPPED'
-                        stageResults['Smoke Tests'] = 'SKIPPED'
-                    }
-                    
-                    // Add Sanity Tests to functional tests parallel execution
-                    if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                        functionalTests['Sanity'] = {
-                            logger.info("Running Sanity Tests")
-                            bat script: PythonScript.sanityTestCommand()
-                            // sh script: PythonScript.sanityTestCommand()  // Linux equivalent
-                            env.SANITY_TEST_RESULT = 'SUCCESS'
-                            stageResults['Sanity Tests'] = 'SUCCESS'
-                            logger.info("Sanity Tests completed successfully")
-                        }
-                    } else {
-                        logger.info("Sanity Tests are disabled - skipping")
-                        env.SANITY_TEST_RESULT = 'SKIPPED'
-                        stageResults['Sanity Tests'] = 'SKIPPED'
-                    }
-                    
-                    // Add Regression Tests to functional tests parallel execution
-                    if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                        functionalTests['Regression'] = {
-                            logger.info("Running Regression Tests")
-                            bat script: PythonScript.regressionTestCommand()
-                            // sh script: PythonScript.regressionTestCommand()  // Linux equivalent
-                            env.REGRESSION_TEST_RESULT = 'SUCCESS'
-                            stageResults['Regression Tests'] = 'SUCCESS'
-                            logger.info("Regression Tests completed successfully")
-                        }
-                    } else {
-                        logger.info("Regression Tests are disabled - skipping")
-                        env.REGRESSION_TEST_RESULT = 'SKIPPED'
-                        stageResults['Regression Tests'] = 'SKIPPED'
-                    }
-                    
-                    // Execute functional tests in parallel if any are enabled
-                    if (functionalTests.size() > 0) {
-                        parallel functionalTests
-                    } else {
-                        logger.info("No functional tests are enabled")
-                    }
-                    
-                    env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                    logger.info("Functional Tests completed")
-                }
-            } else {
-                logger.info("Functional testing is disabled - skipping")
-                env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
-                stageResults['Functional Tests'] = 'SKIPPED'
-            }
-            
-            // Add Unit Test as second parallel branch
+            // Add Unit Test as first parallel branch
             if (core_utils.shouldExecuteStage('unittest', config)) {
                 parallelTests['Unit Test'] = {
                     logger.info("Running Unit Tests")
@@ -182,6 +108,52 @@ def call(Map config = [:]) {
                 logger.info("Unit testing is disabled - skipping")
                 env.UNIT_TEST_RESULT = 'SKIPPED'
                 stageResults['Unit Test'] = 'SKIPPED'
+            }
+            
+            // Add individual functional tests as separate parallel branches
+            if (core_utils.shouldExecuteStage('smoketest', config)) {
+                parallelTests['Smoke Tests'] = {
+                    logger.info("Running Smoke Tests")
+                    bat script: PythonScript.smokeTestCommand()
+                    // sh script: PythonScript.smokeTestCommand()  // Linux equivalent
+                    env.SMOKE_TEST_RESULT = 'SUCCESS'
+                    stageResults['Smoke Tests'] = 'SUCCESS'
+                    logger.info("Smoke Tests completed successfully")
+                }
+            } else {
+                logger.info("Smoke Tests are disabled - skipping")
+                env.SMOKE_TEST_RESULT = 'SKIPPED'
+                stageResults['Smoke Tests'] = 'SKIPPED'
+            }
+            
+            if (core_utils.shouldExecuteStage('sanitytest', config)) {
+                parallelTests['Sanity Tests'] = {
+                    logger.info("Running Sanity Tests")
+                    bat script: PythonScript.sanityTestCommand()
+                    // sh script: PythonScript.sanityTestCommand()  // Linux equivalent
+                    env.SANITY_TEST_RESULT = 'SUCCESS'
+                    stageResults['Sanity Tests'] = 'SUCCESS'
+                    logger.info("Sanity Tests completed successfully")
+                }
+            } else {
+                logger.info("Sanity Tests are disabled - skipping")
+                env.SANITY_TEST_RESULT = 'SKIPPED'
+                stageResults['Sanity Tests'] = 'SKIPPED'
+            }
+            
+            if (core_utils.shouldExecuteStage('regressiontest', config)) {
+                parallelTests['Regression Tests'] = {
+                    logger.info("Running Regression Tests")
+                    bat script: PythonScript.regressionTestCommand()
+                    // sh script: PythonScript.regressionTestCommand()  // Linux equivalent
+                    env.REGRESSION_TEST_RESULT = 'SUCCESS'
+                    stageResults['Regression Tests'] = 'SUCCESS'
+                    logger.info("Regression Tests completed successfully")
+                }
+            } else {
+                logger.info("Regression Tests are disabled - skipping")
+                env.REGRESSION_TEST_RESULT = 'SKIPPED'
+                stageResults['Regression Tests'] = 'SKIPPED'
             }
             
             // Execute parallel tests if any are enabled
