@@ -78,6 +78,9 @@ def setupProjectEnvironment(String language, Map config = [:]){
     if(config.runLintTests != null){
         env.RUN_LINT_TESTS = config.runLintTests.toString()
     }
+    if(config.runFunctionalTests != null){
+        env.RUN_FUNCTIONAL_TESTS = config.runFunctionalTests.toString()
+    }
     logger.info("Project environment setup completed")
     return true
 }
@@ -127,6 +130,28 @@ def validateAndSetDefaults(Map config){
         config.tool_for_lint_testing = [:]
     }
     
+    // Set default stage execution flags if not specified
+    if (config.runUnitTests == null) {
+        config.runUnitTests = true
+    }
+    if (config.runLintTests == null) {
+        config.runLintTests = true
+    }
+    if (config.runFunctionalTests == null) {
+        config.runFunctionalTests = true
+    }
+    
+    // Set individual functional test defaults
+    if (config.runSmokeTests == null) {
+        config.runSmokeTests = true
+    }
+    if (config.runSanityTests == null) {
+        config.runSanityTests = true
+    }
+    if (config.runRegressionTests == null) {
+        config.runRegressionTests = true
+    }
+    
     // Java defaults case
     if (['java-maven', 'java-gradle'].contains(config.project_language)) {
         config.tool_for_unit_testing.java = config.tool_for_unit_testing.java ?: 'junit'
@@ -155,6 +180,11 @@ def getDefaultConfig(){
         project_language: detectProjectLanguage(),
         runUnitTests: true,
         runLintTests: true,
+        runFunctionalTests: true,
+        // Individual functional test controls
+        runSmokeTests: true,
+        runSanityTests: true,
+        runRegressionTests: true,
         tool_for_unit_testing: [:],
         tool_for_lint_testing: [:]
     ]
@@ -172,10 +202,10 @@ def getDefaultConfig(){
 
 /**
  * Checks if a pipeline stage should be executed based on configuration
- * @param stageName Name of stage to check ('unittest', 'lint', etc.)
+ * @param stageName Name of stage to check ('unittest', 'lint', 'functionaltest', 'smoketest', etc.)
  * @param config Pipeline configuration map
  * @return Boolean true if stage should run, false if disabled
- * Usage: if (core_utils.shouldExecuteStage('lint', config)) { runLint() }
+ * Usage: if (core_utils.shouldExecuteStage('smoketest', config)) { runSmokeTests() }
  */
 def shouldExecuteStage(String stageName, Map config){
     switch(stageName.toLowerCase()) {
@@ -188,7 +218,36 @@ def shouldExecuteStage(String stageName, Map config){
         case 'lint_test':
         case 'lint-test':
             return config.runLintTests == true
+        case 'functionaltest':
+        case 'functional_test':
+        case 'functional-test':
+        case 'functionaltests':
+        case 'functional_tests':
+        case 'functional-tests':
+            return config.runFunctionalTests == true
+        case 'smoketest':
+        case 'smoke_test':
+        case 'smoke-test':
+        case 'smoketests':
+        case 'smoke_tests':
+        case 'smoke-tests':
+            return config.runSmokeTests == true
+        case 'sanitytest':
+        case 'sanity_test':
+        case 'sanity-test':
+        case 'sanitytests':
+        case 'sanity_tests':
+        case 'sanity-tests':
+            return config.runSanityTests == true
+        case 'regressiontest':
+        case 'regression_test':
+        case 'regression-test':
+        case 'regressiontests':
+        case 'regression_tests':
+        case 'regression-tests':
+            return config.runRegressionTests == true
         default:
+            logger.warning("Unknown stage name: ${stageName}. Defaulting to true.")
             return true
     }
 }

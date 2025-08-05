@@ -94,25 +94,44 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         logger.info("Running Functional Tests")
+                        def functionalTestResults = []
                         
-                        // Run Smoke Tests
-                        logger.info("Running Smoke Tests")
-                        bat script: MavenScript.smokeTestCommand()
-                        // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
+                        // Run Smoke Tests (if enabled)
+                        if (core_utils.shouldExecuteStage('smoketest', config)) {
+                            logger.info("Running Smoke Tests")
+                            bat script: MavenScript.smokeTestCommand()
+                            // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
+                            functionalTestResults.add("Smoke Tests: SUCCESS")
+                        } else {
+                            logger.info("Smoke Tests are disabled - skipping")
+                            functionalTestResults.add("Smoke Tests: SKIPPED")
+                        }
                         
-                        // Run Sanity Tests
-                        logger.info("Running Sanity Tests")
-                        bat script: MavenScript.sanityTestCommand()
-                        // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
+                        // Run Sanity Tests (if enabled)
+                        if (core_utils.shouldExecuteStage('sanitytest', config)) {
+                            logger.info("Running Sanity Tests")
+                            bat script: MavenScript.sanityTestCommand()
+                            // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
+                            functionalTestResults.add("Sanity Tests: SUCCESS")
+                        } else {
+                            logger.info("Sanity Tests are disabled - skipping")
+                            functionalTestResults.add("Sanity Tests: SKIPPED")
+                        }
                         
-                        // Run Regression Tests
-                        logger.info("Running Regression Tests")
-                        bat script: MavenScript.regressionTestCommand()
-                        // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
+                        // Run Regression Tests (if enabled)
+                        if (core_utils.shouldExecuteStage('regressiontest', config)) {
+                            logger.info("Running Regression Tests")
+                            bat script: MavenScript.regressionTestCommand()
+                            // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
+                            functionalTestResults.add("Regression Tests: SUCCESS")
+                        } else {
+                            logger.info("Regression Tests are disabled - skipping")
+                            functionalTestResults.add("Regression Tests: SKIPPED")
+                        }
                         
                         env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                        stageResults['Functional Tests'] = 'SUCCESS'
-                        logger.info("Functional Tests completed successfully")
+                        stageResults['Functional Tests'] = functionalTestResults.join(", ")
+                        logger.info("Functional Tests completed: ${functionalTestResults.join(', ')}")
                     }
                 }
             }
