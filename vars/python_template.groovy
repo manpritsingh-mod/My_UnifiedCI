@@ -46,58 +46,10 @@ def call(Map config = [:]) {
                 logger.info("SETUP STAGE")
                 core_utils.setupProjectEnvironment(config.project_language, config)
                 
-                // Simple Python detection - try common Python commands
-                def pythonCmd = 'python'
-                def pipCmd = 'pip'
-                
-                // Try to find Python installation (python -> python3 -> py)
-                try {
-                    bat 'python --version'
-                    // sh 'python --version'  // Linux equivalent
-                    pythonCmd = 'python'
-                } catch (Exception e1) {
-                    try {
-                        bat 'python3 --version'
-                        // sh 'python3 --version' // Linux equivalent
-                        pythonCmd = 'python3'
-                    } catch (Exception e2) {
-                        try {
-                            bat 'py --version'
-                            // sh 'python3 --version' // Linux equivalent (py not available on Linux)
-                            pythonCmd = 'py'
-                        } catch (Exception e3) {
-                            throw new Exception("Python not found! Please install Python and add it to PATH.")
-                        }
-                    }
-                }
-                
-                // Try to find pip installation (pip -> pip3 -> python -m pip)
-                try {
-                    bat 'pip --version'
-                    // sh 'pip --version'     // Linux equivalent
-                    pipCmd = 'pip'
-                } catch (Exception e1) {
-                    try {
-                        bat 'pip3 --version'
-                        // sh 'pip3 --version'   // Linux equivalent
-                        pipCmd = 'pip3'
-                    } catch (Exception e2) {
-                        try {
-                            bat "${pythonCmd} -m pip --version"
-                            // sh "${pythonCmd} -m pip --version" // Linux equivalent
-                            pipCmd = "${pythonCmd} -m pip"
-                        } catch (Exception e3) {
-                            throw new Exception("Pip not found! Please install pip.")
-                        }
-                    }
-                }
-                
-                // Set environment variables for use in other pipeline stages
-                env.PYTHON_CMD = pythonCmd
-                env.PIP_CMD = pipCmd
-                
-                logger.info("Using Python: ${pythonCmd}")
-                logger.info("Using Pip: ${pipCmd}")
+                bat 'python --version'
+                // sh 'python --version'  // Linux equivalent
+                bat 'pip --version'
+                // sh 'pip --version'     // Linux equivalent
                 
                 stageResults['Setup'] = 'SUCCESS'
             } catch (Exception e) {
