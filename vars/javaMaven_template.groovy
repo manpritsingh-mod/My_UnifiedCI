@@ -72,85 +72,78 @@ def call(Map config = [:]) {
     }
     
     stage('Test Execution') {
-        parallel {
-            stage('Unit Test') {
-                when {
-                    expression { core_utils.shouldExecuteStage('unittest', config) }
+        script {
+            def parallelTests = [:]
+            
+            // Add Unit Test to parallel execution if enabled
+            if (core_utils.shouldExecuteStage('unittest', config)) {
+                parallelTests['Unit Test'] = {
+                    logger.info("Running Unit Tests")
+                    def testResult = core_test.runUnitTest(config)
+                    env.UNIT_TEST_RESULT = testResult
+                    stageResults['Unit Test'] = testResult
+                    logger.info("Unit test stage completed with result: ${testResult}")
                 }
-                steps {
-                    script {
-                        logger.info("Running Unit Tests")
-                        def testResult = core_test.runUnitTest(config)
-                        env.UNIT_TEST_RESULT = testResult
-                        stageResults['Unit Test'] = testResult
-                        logger.info("Unit test stage completed with result: ${testResult}")
-                    }
-                }
+            } else {
+                logger.info("Unit testing is disabled - skipping")
+                env.UNIT_TEST_RESULT = 'SKIPPED'
+                stageResults['Unit Test'] = 'SKIPPED'
             }
-            stage('Functional Tests') {
-                when {
-                    expression { core_utils.shouldExecuteStage('functionaltest', config) }
-                }
-                steps {
-                    script {
-                        logger.info("Running Functional Tests")
-                        def functionalTestResults = []
-                        
-                        // Run Smoke Tests (if enabled)
-                        if (core_utils.shouldExecuteStage('smoketest', config)) {
-                            logger.info("Running Smoke Tests")
-                            bat script: MavenScript.smokeTestCommand()
-                            // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
-                            functionalTestResults.add("Smoke Tests: SUCCESS")
-                        } else {
-                            logger.info("Smoke Tests are disabled - skipping")
-                            functionalTestResults.add("Smoke Tests: SKIPPED")
-                        }
-                        
-                        // Run Sanity Tests (if enabled)
-                        if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                            logger.info("Running Sanity Tests")
-                            bat script: MavenScript.sanityTestCommand()
-                            // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
-                            functionalTestResults.add("Sanity Tests: SUCCESS")
-                        } else {
-                            logger.info("Sanity Tests are disabled - skipping")
-                            functionalTestResults.add("Sanity Tests: SKIPPED")
-                        }
-                        
-                        // Run Regression Tests (if enabled)
-                        if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                            logger.info("Running Regression Tests")
-                            bat script: MavenScript.regressionTestCommand()
-                            // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
-                            functionalTestResults.add("Regression Tests: SUCCESS")
-                        } else {
-                            logger.info("Regression Tests are disabled - skipping")
-                            functionalTestResults.add("Regression Tests: SKIPPED")
-                        }
-                        
-                        env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                        stageResults['Functional Tests'] = functionalTestResults.join(", ")
-                        logger.info("Functional Tests completed: ${functionalTestResults.join(', ')}")
+            
+            // Add Functional Tests to parallel execution if enabled
+            if (core_utils.shouldExecuteStage('functionaltest', config)) {
+                parallelTests['Functional Tests'] = {
+                    logger.info("Running Functional Tests")
+                    def functionalTestResults = []
+                    
+                    // Run Smoke Tests (if enabled)
+                    if (core_utils.shouldExecuteStage('smoketest', config)) {
+                        logger.info("Running Smoke Tests")
+                        bat script: MavenScript.smokeTestCommand()
+                        // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
+                        functionalTestResults.add("Smoke Tests: SUCCESS")
+                    } else {
+                        logger.info("Smoke Tests are disabled - skipping")
+                        functionalTestResults.add("Smoke Tests: SKIPPED")
                     }
+                    
+                    // Run Sanity Tests (if enabled)
+                    if (core_utils.shouldExecuteStage('sanitytest', config)) {
+                        logger.info("Running Sanity Tests")
+                        bat script: MavenScript.sanityTestCommand()
+                        // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
+                        functionalTestResults.add("Sanity Tests: SUCCESS")
+                    } else {
+                        logger.info("Sanity Tests are disabled - skipping")
+                        functionalTestResults.add("Sanity Tests: SKIPPED")
+                    }
+                    
+                    // Run Regression Tests (if enabled)
+                    if (core_utils.shouldExecuteStage('regressiontest', config)) {
+                        logger.info("Running Regression Tests")
+                        bat script: MavenScript.regressionTestCommand()
+                        // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
+                        functionalTestResults.add("Regression Tests: SUCCESS")
+                    } else {
+                        logger.info("Regression Tests are disabled - skipping")
+                        functionalTestResults.add("Regression Tests: SKIPPED")
+                    }
+                    
+                    env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
+                    stageResults['Functional Tests'] = functionalTestResults.join(", ")
+                    logger.info("Functional Tests completed: ${functionalTestResults.join(', ')}")
                 }
+            } else {
+                logger.info("Functional testing is disabled - skipping")
+                env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
+                stageResults['Functional Tests'] = 'SKIPPED'
             }
-        }
-        post {
-            always {
-                script {
-                    // Set default values if stages were skipped
-                    if (!env.UNIT_TEST_RESULT) {
-                        env.UNIT_TEST_RESULT = 'SKIPPED'
-                        stageResults['Unit Test'] = 'SKIPPED'
-                        logger.info("Unit testing was disabled - skipped")
-                    }
-                    if (!env.FUNCTIONAL_TEST_RESULT) {
-                        env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
-                        stageResults['Functional Tests'] = 'SKIPPED'
-                        logger.info("Functional testing was disabled - skipped")
-                    }
-                }
+            
+            // Execute parallel tests if any are enabled
+            if (parallelTests.size() > 0) {
+                parallel parallelTests
+            } else {
+                logger.info("No tests are enabled - skipping test execution")
             }
         }
     }
