@@ -31,7 +31,7 @@ def call(Map config = [:]) {
     
     /**
      * STAGE 2: Setup - Detects Python and pip installations, sets up environment
-     * Tries multiple Python commands (python, python3, py) to find working installation
+     * Creates virtual environment and sets up isolated Python environment
      * Sets PYTHON_CMD and PIP_CMD environment variables for later stages
      */
     stage('Setup') {
@@ -39,23 +39,35 @@ def call(Map config = [:]) {
             logger.info("SETUP STAGE")
             core_utils.setupProjectEnvironment(config.project_language, config)
             
+            // Check Python and Pip versions
             bat script: PythonScript.pythonVersionCommand()
             // sh script: PythonScript.pythonVersionCommand()  // Linux equivalent
             bat script: PythonScript.pipVersionCommand()
             // sh script: PythonScript.pipVersionCommand()     // Linux equivalent
             
+            // Create virtual environment
+            logger.info("Creating virtual environment...")
+            bat script: PythonScript.createVirtualEnvCommand()
+            // sh script: PythonScript.createVirtualEnvCommand()  // Linux equivalent
+            
+            logger.info("Virtual environment created successfully")
             stageResults['Setup'] = 'SUCCESS'
         }
     }
     
     /**
      * STAGE 3: Install Dependencies - Installs Python packages from requirements.txt
-     * Uses pip to install all project dependencies needed for build and test
+     * Uses pip in virtual environment to install all project dependencies
      */
     stage('Install Dependencies') {
         script {
-            logger.info("INSTALL DEPENDENCIES STAGE")
-            core_build.installDependencies('python', 'pip', config)
+            logger.info("INSTALL DEPENDENCIES STAGE - Installing in virtual environment")
+            
+            // Install dependencies in virtual environment
+            bat script: PythonScript.venvPipInstallCommand()
+            // sh script: PythonScript.venvPipInstallLinuxCommand()  // Linux equivalent
+            
+            logger.info("Dependencies installed successfully in virtual environment")
             stageResults['Install Dependencies'] = 'SUCCESS'
         }
     }
@@ -98,11 +110,15 @@ def call(Map config = [:]) {
             // Add Unit Test as first parallel branch
             if (core_utils.shouldExecuteStage('unittest', config)) {
                 parallelTests['Unit Test'] = {
-                    logger.info("Running Unit Tests")
-                    def testResult = core_test.runUnitTest(config)
-                    env.UNIT_TEST_RESULT = testResult
-                    stageResults['Unit Test'] = testResult
-                    logger.info("Unit test stage completed with result: ${testResult}")
+                    logger.info("Running Unit Tests in virtual environment")
+                    
+                    // Run unit tests using virtual environment
+                    bat script: PythonScript.venvTestCommand()
+                    // sh script: PythonScript.venvTestLinuxCommand()  // Linux equivalent
+                    
+                    env.UNIT_TEST_RESULT = 'SUCCESS'
+                    stageResults['Unit Test'] = 'SUCCESS'
+                    logger.info("Unit test stage completed with result: SUCCESS")
                 }
             } else {
                 logger.info("Unit testing is disabled - skipping")
@@ -122,9 +138,9 @@ def call(Map config = [:]) {
                     // Individual Stage: Smoke Tests
                     stage('Smoke Tests') {
                         if (core_utils.shouldExecuteStage('smoketest', config)) {
-                            logger.info("Running Smoke Tests")
-                            bat script: PythonScript.smokeTestCommand()
-                            // sh script: PythonScript.smokeTestCommand()  // Linux equivalent
+                            logger.info("Running Smoke Tests in virtual environment")
+                            bat script: PythonScript.venvSmokeTestCommand()
+                            // sh script: PythonScript.venvSmokeTestLinuxCommand()  // Linux equivalent
                             env.SMOKE_TEST_RESULT = 'SUCCESS'
                             stageResults['Smoke Tests'] = 'SUCCESS'
                             logger.info("Smoke Tests completed successfully")
@@ -138,9 +154,9 @@ def call(Map config = [:]) {
                     // Individual Stage: Sanity Tests (runs after Smoke)
                     stage('Sanity Tests') {
                         if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                            logger.info("Running Sanity Tests")
-                            bat script: PythonScript.sanityTestCommand()
-                            // sh script: PythonScript.sanityTestCommand()  // Linux equivalent
+                            logger.info("Running Sanity Tests in virtual environment")
+                            bat script: PythonScript.venvSanityTestCommand()
+                            // sh script: PythonScript.venvSanityTestLinuxCommand()  // Linux equivalent
                             env.SANITY_TEST_RESULT = 'SUCCESS'
                             stageResults['Sanity Tests'] = 'SUCCESS'
                             logger.info("Sanity Tests completed successfully")
@@ -154,9 +170,9 @@ def call(Map config = [:]) {
                     // Individual Stage: Regression Tests (runs after Sanity)
                     stage('Regression Tests') {
                         if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                            logger.info("Running Regression Tests")
-                            bat script: PythonScript.regressionTestCommand()
-                            // sh script: PythonScript.regressionTestCommand()  // Linux equivalent
+                            logger.info("Running Regression Tests in virtual environment")
+                            bat script: PythonScript.venvRegressionTestCommand()
+                            // sh script: PythonScript.venvRegressionTestLinuxCommand()  // Linux equivalent
                             env.REGRESSION_TEST_RESULT = 'SUCCESS'
                             stageResults['Regression Tests'] = 'SUCCESS'
                             logger.info("Regression Tests completed successfully")
@@ -192,6 +208,24 @@ def call(Map config = [:]) {
             // Generate Allure report and send email summary with dynamic stage results
             sendReport.generateAndSendReports(config, stageResults)
             stageResults['Generate Reports'] = 'SUCCESS'
+        }
+    }
+    
+    stage('Cleanup') {
+        script {
+            logger.info("CLEANUP STAGE - Cleaning up virtual environment")
+            
+            try {
+                // Cleanup virtual environment
+                bat script: PythonScript.cleanupVirtualEnvCommand()
+                // sh script: PythonScript.cleanupVirtualEnvLinuxCommand()  // Linux equivalent
+                
+                logger.info("Virtual environment cleaned up successfully")
+                stageResults['Cleanup'] = 'SUCCESS'
+            } catch (Exception e) {
+                logger.warning("Virtual environment cleanup failed, but continuing: ${e.getMessage()}")
+                stageResults['Cleanup'] = 'WARNING'
+            }
         }
     }
 }

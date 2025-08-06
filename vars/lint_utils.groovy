@@ -75,11 +75,11 @@ private def runJavaLint(String language, String lintTool, Map config) {
 }
 
 private def runPythonLint(String lintTool, Map config) {
-    logger.info("Executing Python lint with ${lintTool}")
+    logger.info("Executing Python lint with ${lintTool} in virtual environment")
     
     try {
-        bat script: PythonScript.lintCommand(lintTool)
-        // sh script: PythonScript.lintCommand(lintTool)  // Linux equivalent
+        bat script: PythonScript.venvLintCommand(lintTool)
+        // sh script: PythonScript.venvLintLinuxCommand(lintTool)  // Linux equivalent
         logger.info("Python lint passed with no violations")
         return true
     } catch (Exception e) {
