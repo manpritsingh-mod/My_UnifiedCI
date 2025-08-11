@@ -1,0 +1,12 @@
+git:latest
+pipeline-stage-view:latest
+blueocean:latest
+docker-workflow:latest
+docker-pipeline:latest
+pipeline-utility-steps:latest
+email-ext:latest
+allure-jenkins-plugin:latest
+slack:latest
+credentials:latest
+credentials-binding:latest
+workflow-aggregator:latest

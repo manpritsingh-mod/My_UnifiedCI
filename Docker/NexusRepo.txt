@@ -1,0 +1,16 @@
+Nexus Repository (nexus.company.com:8082)
+├── dev/                          # Project folder
+    ├── python/                   # Tool folder
+    │   ├── 3.8                   # Version tag
+    │   ├── 3.9                   # Version tag  
+    │   ├── 3.11                  # Version tag
+    │   └── latest                # Default tag (points to 3.11)
+    ├── maven/                    # Tool folder
+    │   ├── 3.8.6                 # Version tag
+    │   ├── 3.9.0                 # Version tag
+    │   └── latest                # Default tag (points to 3.8.6)
+    └── gradle/                   # Tool folder
+        ├── 7.4                   # Version tag
+        ├── 7.6.1                 # Version tag
+        ├── 8.0                   # Version tag
+        └── latest                # Default tag (points to 7.6.1)

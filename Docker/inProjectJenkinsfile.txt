@@ -1,0 +1,50 @@
+@Library('your-shared-library') _
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Build Java Maven App') {
+            steps {
+                script {
+                    // Call your updated template with Docker configuration
+                    javaMaven_docker_template([
+                        maven_version: '3.8.6',
+                        runUnitTests: true,
+                        runLintTests: true,
+                        nexus: [
+                            url: 'https://nexus.company.com:8082',
+                            registry: 'nexus.company.com:8082',
+                            project: 'dev',
+                            credentials_id: 'nexus-docker-creds'
+                        ]
+                    ])
+                }
+            }
+        }
+    }
+}
+
+
+__________________________
+
+
+@Library('your-shared-library') _
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Build Python App') {
+            steps {
+                script {
+                    python_docker_template([
+                        python_version: '3.11',
+                        runUnitTests: true,
+                        runLintTests: true
+                    ])
+                }
+            }
+        }
+    }
+}

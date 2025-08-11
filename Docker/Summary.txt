@@ -1,0 +1,88 @@
+Your Nexus Repository Browser:
+├── Repositories
+    └── docker (hosted)
+        └── v2
+            └── dev
+                ├── python
+                │   ├── 3.8      ← nexus.company.com:8082/dev/python:3.8
+                │   ├── 3.9      ← nexus.company.com:8082/dev/python:3.9
+                │   ├── 3.11     ← nexus.company.com:8082/dev/python:3.11
+                │   └── latest   ← nexus.company.com:8082/dev/python:latest
+                ├── maven
+                │   ├── 3.8.6    ← nexus.company.com:8082/dev/maven:3.8.6
+                │   ├── 3.9.0    ← nexus.company.com:8082/dev/maven:3.9.0
+                │   └── latest   ← nexus.company.com:8082/dev/maven:latest
+                └── gradle
+                    ├── 7.4      ← nexus.company.com:8082/dev/gradle:7.4
+                    ├── 7.6.1    ← nexus.company.com:8082/dev/gradle:7.6.1
+                    ├── 8.0      ← nexus.company.com:8082/dev/gradle:8.0
+                    └── latest   ← nexus.company.com:8082/dev/gradle:latest
+
+
+
+
+__________________________
+
+┌─────────────────────────────────────────────────────────────┐
+│                    NEXUS REPOSITORY                         │
+│  (Pre-built images stored here - ready to use)             │
+├─────────────────────────────────────────────────────────────┤
+│  nexus.company.com:8082/dev/python:3.8                     │
+│  nexus.company.com:8082/dev/python:3.9                     │
+│  nexus.company.com:8082/dev/python:3.11                    │
+│  nexus.company.com:8082/dev/python:latest                  │
+│                                                             │
+│  nexus.company.com:8082/dev/maven:3.8.6                    │
+│  nexus.company.com:8082/dev/maven:3.9.0                    │
+│  nexus.company.com:8082/dev/maven:latest                   │
+│                                                             │
+│  nexus.company.com:8082/dev/gradle:7.4                     │
+│  nexus.company.com:8082/dev/gradle:7.6.1                   │
+│  nexus.company.com:8082/dev/gradle:8.0                     │
+│  nexus.company.com:8082/dev/gradle:latest                  │
+└─────────────────────────────────────────────────────────────┘
+                              ↑
+                    Images are PRE-BUILT
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│           YOUR APPLICATION JENKINS PIPELINES               │
+│                    (Just FETCH images)                     │
+├─────────────────────────────────────────────────────────────┤
+│  stage('Build') {                                           │
+│    // Pull Python 3.11 from Nexus                         │
+│    docker.image('nexus.../python:3.11').inside {           │
+│      sh 'pip install -r requirements.txt'                  │
+│      sh 'python setup.py build'                            │
+│    }                                                        │
+│  }                                                          │
+└─────────────────────────────────────────────────────────────┘
+__________________________
+
+
+
+
+┌─────────────────────────────────────────────────────────────┐
+│                    NEXUS REPOSITORY                         │
+│              (Pre-built images stored)                     │
+│  nexus.company.com:8082/dev/python:3.11                    │
+│  nexus.company.com:8082/dev/maven:3.8.6                    │
+│  nexus.company.com:8082/dev/gradle:7.6.1                   │
+└─────────────────────────────────────────────────────────────┘
+                              ↓ PULL
+┌─────────────────────────────────────────────────────────────┐
+│              SEPARATE JENKINSFILE                           │
+│           (Pulls images + Builds application)              │
+│                                                             │
+│  stage('Pull Images') { ... }                              │
+│  stage('Build App') { ... }                                │
+│  stage('Test App') { ... }                                 │
+└─────────────────────────────────────────────────────────────┘
+                              ↑ USES
+┌─────────────────────────────────────────────────────────────┐
+│                SHARED LIBRARY                               │
+│            (Provides utilities only)                       │
+│                                                             │
+│  core_build_docker.groovy                                  │
+│  core_test_docker.groovy                                   │
+│  DockerImageManager.groovy                                 │
+└─────────────────────────────────────────────────────────────┘

@@ -1,0 +1,91 @@
+FROM gradle:7.6.1-jdk11
+
+# Add labels for better image management
+LABEL maintainer="DevOps Team"
+LABEL gradle_version="7.6.1"
+LABEL java_version="11"
+LABEL description="Custom Gradle build tool for Java projects"
+
+# Install additional system tools your team might need
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    unzip \
+    wget \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-download common Gradle plugins to speed up builds
+RUN gradle --version && \
+    mkdir -p /tmp/gradle-init && \
+    cd /tmp/gradle-init && \
+    gradle init --type java-application --dsl groovy --test-framework junit --project-name sample --package sample && \
+    gradle build && \
+    cd / && rm -rf /tmp/gradle-init
+
+# Install additional tools for code quality and testing
+RUN apt-get update && apt-get install -y \
+    # For SpotBugs and other analysis tools
+    graphviz \
+    # For integration testing
+    netcat \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a gradle cache directory
+RUN mkdir -p /home/gradle/.gradle/caches && \
+    chown -R gradle:gradle /home/gradle/.gradle
+
+# Pre-populate Gradle wrapper cache with common versions
+RUN mkdir -p /tmp/gradle-wrapper-test && \
+    cd /tmp/gradle-wrapper-test && \
+    echo 'distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.1-bin.zip' > gradle/wrapper/gradle-wrapper.properties && \
+    echo 'distributionBase=GRADLE_USER_HOME' >> gradle/wrapper/gradle-wrapper.properties && \
+    echo 'distributionPath=wrapper/dists' >> gradle/wrapper/gradle-wrapper.properties && \
+    echo 'zipStoreBase=GRADLE_USER_HOME' >> gradle/wrapper/gradle-wrapper.properties && \
+    echo 'zipStorePath=wrapper/dists' >> gradle/wrapper/gradle-wrapper.properties && \
+    cd / && rm -rf /tmp/gradle-wrapper-test
+
+# Set up workspace directory
+WORKDIR /workspace
+
+# Set environment variables for better Gradle performance
+ENV GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.configureondemand=true"
+ENV GRADLE_USER_HOME="/home/gradle/.gradle"
+
+# Verify installation and show versions
+RUN gradle --version && \
+    java -version && \
+    echo "Custom Gradle image ready!"
+
+# Switch to gradle user for security
+USER gradle
+
+# Default command
+CMD ["gradle", "--version"]
+
+
+_____________________________________
+
+ARG GRADLE_VERSION=7.6.1
+ARG JAVA_VERSION=11
+FROM openjdk:${JAVA_VERSION}-jdk-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    unzip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Gradle
+RUN curl -L https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -o gradle.zip \
+    && unzip gradle.zip \
+    && mv gradle-${GRADLE_VERSION} /opt/gradle \
+    && rm gradle.zip
+
+# Set environment variables
+ENV GRADLE_HOME=/opt/gradle
+ENV PATH=$PATH:$GRADLE_HOME/bin
+
+# Create workspace directory
+WORKDIR /workspace

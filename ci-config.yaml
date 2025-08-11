@@ -1,0 +1,38 @@
+# Project Configuration
+project_language: java-maven
+
+# Docker & Registry Configuration
+nexus:
+  url: "nexus.company.com:8082"
+  credentials_id: "nexus-docker-creds"
+
+# Version Configuration
+versions:
+  java-maven: "3.8.6"
+  java-gradle: "7.6.1" 
+  python: "3.11"
+
+# Stage Control
+runUnitTests: true
+runLintTests: true
+runFunctionalTests: true
+runSmokeTests: true
+runSanityTests: true
+runRegressionTests: true
+
+# Tool Configuration
+tool_for_unit_testing:
+  java: "junit"
+  python: "pytest"
+
+tool_for_lint_testing:
+  java: "checkstyle"
+  python: "pylint"
+
+# Notification Configuration
+notifications:
+  email:
+    recipients: ["team@company.com"]
+  slack:
+    enabled: false
+    channel: "#builds"

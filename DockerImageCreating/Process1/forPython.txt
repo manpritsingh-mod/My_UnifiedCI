@@ -1,0 +1,16 @@
+# Pull official Python images
+docker pull python:3.8-slim
+docker pull python:3.9-slim  
+docker pull python:3.11-slim
+
+# Tag them for your Nexus
+docker tag python:3.8-slim nexus.company.com:8082/dev/python:3.8
+docker tag python:3.9-slim nexus.company.com:8082/dev/python:3.9
+docker tag python:3.11-slim nexus.company.com:8082/dev/python:3.11
+docker tag python:3.11-slim nexus.company.com:8082/dev/python:latest
+
+# Push to Nexus
+docker push nexus.company.com:8082/dev/python:3.8
+docker push nexus.company.com:8082/dev/python:3.9
+docker push nexus.company.com:8082/dev/python:3.11
+docker push nexus.company.com:8082/dev/python:latest
