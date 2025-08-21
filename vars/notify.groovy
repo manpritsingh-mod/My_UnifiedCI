@@ -1,10 +1,4 @@
 /**
- * SIMPLIFIED Notification utilities for Jenkins pipeline
- * Email: Always send (default)
- * Slack: Only if enabled in config
- */
-
-/**
  * Main method to send build notifications via email and optionally Slack
  * @param status Build status ('SUCCESS', 'FAILURE', 'UNSTABLE', 'ABORTED')
  * @param config Pipeline configuration map containing notification settings
@@ -20,19 +14,16 @@ def notifyBuildStatus(String status, Map config = [:]) {
             buildInfo: buildInfo,
             timestamp: new Date().format('yyyy-MM-dd HH:mm:ss')
         ]
-        
-        // ALWAYS send email notification (default behavior)
+
         sendEmailNotification(notificationData, config)
-        
-        // CONDITIONALLY send Slack notification (only if enabled)
+
         if (config.notifications?.slack?.enabled == true) {
             logger.info("Slack is enabled - sending Slack notification")
             sendSlackNotification(notificationData, config)
         } else {
             logger.info("Slack is disabled - skipping Slack notification")
         }
-        
-        // Log to console
+
         logNotification(notificationData)
         
     } catch (Exception e) {
@@ -40,16 +31,12 @@ def notifyBuildStatus(String status, Map config = [:]) {
     }
 }
 
-
-
-// 2. GET CURRENT BUILD STATUS (from Jenkins)
 def getBuildStatus() {
     def status = currentBuild.result ?: 'SUCCESS'
     logger.info("Current Jenkins build status: ${status}")
     return status
 }
 
-// 3. SEND EMAIL NOTIFICATION (ALWAYS)
 private def sendEmailNotification(Map notificationData, Map config) {
     logger.info("Sending email notification (always enabled)")
     
@@ -69,11 +56,9 @@ private def sendEmailNotification(Map notificationData, Map config) {
     }
 }
 
-// 4. SEND SLACK NOTIFICATION (CONDITIONAL - COMMENTED FOR NOW)
 def sendSlackNotification(Map notificationData, Map config) {
     logger.info("Preparing Slack notification...")
-    
-    /* SLACK IMPLEMENTATION - COMMENTED UNTIL ACCESS IS AVAILABLE
+    /*
     
     def slackChannel = config.notifications?.slack?.channel ?: '#builds'
     def message = generateSlackMessage(notificationData)
@@ -90,15 +75,11 @@ def sendSlackNotification(Map notificationData, Map config) {
     } catch (Exception e) {
         logger.error("Failed to send Slack notification: ${e.getMessage()}")
     }
-    
-    END OF COMMENTED SLACK IMPLEMENTATION */
-    
-    // For now, just log that Slack would be sent
+    */
+
     logger.info("Slack notification would be sent to: ${config.notifications?.slack?.channel ?: '#builds'}")
     logger.info("Slack message: ${generateSlackMessage(notificationData)}")
 }
-
-// 5. HELPER METHODS
 
 def getBuildInfo() {
     return [
@@ -115,7 +96,6 @@ private def logNotification(Map notificationData) {
     logger.info("Job: ${notificationData.buildInfo.jobName}")
     logger.info("Build: #${notificationData.buildInfo.buildNumber}")
     logger.info("Time: ${notificationData.timestamp}")
-    logger.info("==========================")
 }
 
 private String generateEmailBody(Map notificationData) {

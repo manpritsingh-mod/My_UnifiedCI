@@ -1,13 +1,13 @@
 /**
- * Maven Script Generator - Creates Maven commands for different pipeline operations
- * Provides standardized Maven commands with batch mode (-B) for CI/CD environments
+ * Maven Script - Creates Maven commands for different pipeline operations
+ * Provides standardized Maven commands with batch mode (-B)
  */
 class MavenScript {
     
     /**
      * Generates Maven build command (clean, compile, package)
      * @return String Maven command for building the project
-     * Usage: def cmd = MavenScript.buildCommand() // Returns "mvn clean install -B"
+     * Usage: def cmd = MavenScript.buildCommand() // returns "mvn clean install -B"
      */
     static String buildCommand() {
         return "mvn clean install -B"
@@ -15,16 +15,14 @@ class MavenScript {
     
     /**
      * Generates Maven test command based on test framework
-     * @param testTool Test framework to use ('junit', 'testng', 'surefire')
+     * @param testTool Test framework to use ('junit', 'surefire')
      * @return String Maven command for running tests
-     * Usage: def cmd = MavenScript.testCommand('junit') // Returns "mvn test -B"
+     * Usage: def cmd = MavenScript.testCommand('junit') // returns "mvn test -B"
      */
     static String testCommand(String testTool = 'junit') {
         switch(testTool) {
             case 'junit':
                 return "mvn test -B"
-            case 'testng':
-                return "mvn test -B -Dtest.framework=testng"
             case 'surefire':
                 return "mvn surefire:test -B"
             default:
@@ -36,7 +34,7 @@ class MavenScript {
      * Generates Maven lint/code quality command
      * @param lintTool Lint tool to use ('checkstyle', 'spotbugs')
      * @return String Maven command for code quality checks
-     * Usage: def cmd = MavenScript.lintCommand('checkstyle') // Returns "mvn checkstyle:check -B"
+     * Usage: def cmd = MavenScript.lintCommand('checkstyle') // returns "mvn checkstyle:check -B"
      */
     static String lintCommand(String lintTool = 'checkstyle') {
         switch(lintTool) {
@@ -47,24 +45,24 @@ class MavenScript {
     }
     
     /**
-     * Generates Maven dependency installation command
      * @return String Maven command for resolving and downloading dependencies
-     * Usage: def cmd = MavenScript.installDependenciesCommand() // Returns "mvn dependency:resolve -B"
+     * Usage: def cmd = MavenScript.installDependenciesCommand() // returns "mvn dependency:resolve -B"
      */
     static String installDependenciesCommand() {
         return "mvn dependency:resolve -B"
     }
     
-    // Version check commands
+    // Java Version check commands
     static String javaVersionCommand() {
         return "java -version"
     }
     
+    // Maven Version check commands
     static String mavenVersionCommand() {
         return "mvn -version"
     }
     
-    // Functional test commands with Maven profiles
+    // Functional test commands (Smoke, Sanity, Regression)
     static String smokeTestCommand() {
         return "mvn test -Psmoke"
     }
@@ -77,5 +75,3 @@ class MavenScript {
         return "mvn test -Pregression"
     }
 }
-
-

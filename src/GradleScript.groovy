@@ -1,5 +1,5 @@
 /**
- * Gradle Script Generator - Creates Gradle commands for different pipeline operations
+ * Gradle Script - Creates Gradle commands for different pipeline operations
  * Uses Gradle wrapper (./gradlew) for consistent build environment across systems
  */
 class GradleScript {
@@ -7,29 +7,27 @@ class GradleScript {
     /**
      * Generates Gradle build command (compile, test, package)
      * @return String Gradle command for building the project
-     * Usage: def cmd = GradleScript.buildCommand() // Returns "./gradlew build"
+     * Usage: def cmd = GradleScript.buildCommand() // returns "./gradlew build"
      */
     static String buildCommand() {
-        return "./gradlew build"
+        return "gradle build"
     }
     
     /**
      * Generates Gradle test command based on test framework
-     * @param testTool Test framework to use ('junit', 'junit5', 'testng', 'spock')
+     * @param testTool Test framework to use ('junit', 'junit5', 'spock')
      * @return String Gradle command for running tests
-     * Usage: def cmd = GradleScript.testCommand('junit5') // Returns "./gradlew test"
+     * Usage: def cmd = GradleScript.testCommand('junit5') // returns "./gradlew test"
      */
     static String testCommand(String testTool = 'junit') {
         switch(testTool) {
             case 'junit':
             case 'junit5':
-                return "./gradlew test"
-            case 'testng':
-                return "./gradlew test --tests '*TestNG*'"
+                return "gradle test"
             case 'spock':
-                return "./gradlew test --tests '*Spec'"
+                return "gradle test --tests '*Spec'"
             default:
-                return "./gradlew test -Dtest.framework=${testTool}"
+                return "gradle test -Dtest.framework=${testTool}"
         }
     }
     
@@ -37,44 +35,48 @@ class GradleScript {
      * Generates Gradle lint/code quality command
      * @param lintTool Lint tool to use ('checkstyle', 'spotbugs')
      * @return String Gradle command for code quality checks
-     * Usage: def cmd = GradleScript.lintCommand('checkstyle') // Returns "./gradlew checkstyleMain"
+     * Usage: def cmd = GradleScript.lintCommand('checkstyle') // returns "./gradlew checkstyleMain"
      */
     static String lintCommand(String lintTool = 'checkstyle') {
         switch(lintTool) {
-            case 'checkstyle': return "./gradlew checkstyleMain"
-            case 'spotbugs': return "./gradlew spotbugsMain"
-            default: throw new IllegalArgumentException("Unknown lint tool: ${lintTool}. Supported: checkstyle, spotbugs")
+            case 'checkstyle': 
+                return "gradle checkstyleMain"
+            case 'spotbugs': 
+                return "gradle spotbugsMain"
+            default: 
+                throw new IllegalArgumentException("Unknown lint tool: ${lintTool}. Supported: checkstyle, spotbugs")
         }
     }
     
     /**
      * Generates Gradle dependency resolution command
      * @return String Gradle command for resolving and downloading dependencies
-     * Usage: def cmd = GradleScript.installDependenciesCommand() // Returns "./gradlew dependencies"
+     * Usage: def cmd = GradleScript.installDependenciesCommand() // returns "./gradlew dependencies"
      */
     static String installDependenciesCommand() {
-        return "./gradlew dependencies"
+        return "gradle dependencies"
     }
     
-    // Version check commands
+    // Java Version check commands
     static String javaVersionCommand() {
         return "java -version"
     }
     
+    // Gradle Version check commands
     static String gradleVersionCommand() {
-        return "./gradlew --version"
+        return "gradle --version"
     }
     
-    // Functional test commands with Gradle profiles
+    // Functional test commands for (Smoke, Sanity, Regression)
     static String smokeTestCommand() {
-        return "./gradlew test -Psmoke"
+        return "gradle test -Psmoke"
     }
     
     static String sanityTestCommand() {
-        return "./gradlew test -Psanity"
+        return "gradle test -Psanity"
     }
     
     static String regressionTestCommand() {
-        return "./gradlew test -Pregression"
+        return "gradle test -Pregression"
     }
 }

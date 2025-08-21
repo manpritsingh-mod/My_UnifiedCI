@@ -25,7 +25,7 @@ def makeAllureReport() {
 
     try {
         if (!fileExists('allure-results')) {
-            bat 'mkdir -p allure-results'
+            sh 'mkdir -p allure-results'
         }
 
         // Copy test result files from different build tool folders to allure-results
@@ -58,7 +58,7 @@ def copyAllTestFiles() {
             def files = findFiles(glob: 'target/surefire-reports/*.xml')
             files.each { file ->
                 try {
-                    bat "cp \"${file.path}\" allure-results/" 
+                    sh "cp \"${file.path}\" allure-results/" 
                     foundAny = true
                     logger.info("Copied Maven test: ${file.name}")
                 } catch (Exception e) {
@@ -72,7 +72,7 @@ def copyAllTestFiles() {
             def files = findFiles(glob: 'build/test-results/test/*.xml')
             files.each { file ->
                 try {
-                    bat "cp \"${file.path}\" allure-results/"
+                    sh "cp \"${file.path}\" allure-results/"
                     foundAny = true
                     logger.info("Copied Gradle test: ${file.name}")
                 } catch (Exception e) {
@@ -83,7 +83,7 @@ def copyAllTestFiles() {
         // Look for Python pytest file test-results.xml
         if (fileExists('test-results.xml')) {
             try {
-                bat "cp test-results.xml allure-results/"
+                sh "cp test-results.xml allure-results/"
                 foundAny = true
                 logger.info("Copied Python test: test-results.xml")
             } catch (Exception e) {
@@ -103,18 +103,17 @@ def copyAllTestFiles() {
 }
 
 def makeDummyTestFile() {
-    def dummyXml = '''
-    <?xml version="1.0" encoding="UTF-8"?>
+    def dummyXml = """<?xml version="1.0" encoding="UTF-8"?>
         <testsuite name="NoTestsFound" tests="1" failures="0" errors="0" skipped="0">
             <testcase name="placeholder" classname="PlaceholderTest">
                 <system-out>No tests found - this is just a placeholder</system-out>
             </testcase>
-        </testsuite>
-    '''
-    
+        </testsuite>"""
+
     writeFile file: 'allure-results/dummy.xml', text: dummyXml
-    logger.info("Created dummy test file")
+    echo "Created dummy test file"
 }
+
 
 def sendSimpleEmailSlack(Map config, Map stageResults) {
     logger.info("Sending email...")
@@ -261,10 +260,10 @@ def getNumber(String xml, String attribute) {
 //                 (status == 'UNSTABLE') ? 'warning' : 'danger'
 
 //     def message = """
-//             ${status}: ${jobName} #${buildNumber}
-//             Tests: Total: ${tests.total}, Passed: ${tests.passed}, Failed: ${tests.failed}, Skipped: ${tests.skipped}
-//             Lint Issues: ${lintCount}
-//             URL: ${env.BUILD_URL ?: 'Not available'}
+//             *${status}*: ${jobName} #${buildNumber}
+//             *Tests:* Total: ${tests.total}, Passed: ${tests.passed}, Failed: ${tests.failed}, Skipped: ${tests.skipped}
+//             *Lint Issues:* ${lintCount}
+//             *URL:* ${env.BUILD_URL ?: 'Not available'}
 //             """.stripIndent().trim()
 
 //     slackSend(
@@ -272,6 +271,6 @@ def getNumber(String xml, String attribute) {
 //         color: color,
 //         message: message
 //     )
-// }
+// }
 
 return this

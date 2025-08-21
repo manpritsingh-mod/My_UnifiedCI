@@ -1,9 +1,0 @@
-# Get specific version
-docker pull nexus.company.com:8082/dev/python:3.11
-docker pull nexus.company.com:8082/dev/maven:3.8.6
-docker pull nexus.company.com:8082/dev/gradle:7.6.1
-
-# Get default/latest version
-docker pull nexus.company.com:8082/dev/python:latest
-docker pull nexus.company.com:8082/dev/maven:latest
-docker pull nexus.company.com:8082/dev/gradle:latest

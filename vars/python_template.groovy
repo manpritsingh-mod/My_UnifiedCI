@@ -1,7 +1,7 @@
 /**
- * Python Pipeline Template - Executes complete Python CI/CD pipeline
+ * Python Pipeline Template - Executes complete Python pipeline
  * Handles Python project detection, dependency installation, linting, testing, and reporting
- * @param config Pipeline configuration map (optional, uses defaults if not provided)
+ * @param config - Pipeline configuration map (optional, uses defaults if not provided)
  * Usage: python_template() or python_template([project_language: 'python', lint: true])
  */
 def call(Map config = [:]) {
@@ -12,71 +12,102 @@ def call(Map config = [:]) {
         logger.info("No config provided, using default configuration")
         config = core_utils.getDefaultConfig()
     }
+
+    if (!config.nexus?.registry || !config.nexus?.credentials_id || !config.nexus?.url) {
+        error "Missing Nexus configuration. Please provide 'nexus.registry', 'nexus.url', and 'nexus.credentials_id'."
+    }
+
     
     // Initialize stage results tracking for email reporting
     def stageResults = [:]
-    
-    // Execute Python-specific pipeline stages
-    /**
-     * STAGE 1: Checkout - Downloads source code from Git repository
-     * Uses core_github.checkout() to pull latest code from configured branch
-     */
+
     stage('Checkout') {
         script {
-            logger.info("CHECKOUT STAGE")
-            core_github.checkout()
-            stageResults['Checkout'] = 'SUCCESS'
+                logger.info("CHECKOUT STAGE")
+                core_github.checkout()
+                stageResults['Checkout'] = 'SUCCESS'
         }
     }
-    
-    /**
-     * STAGE 2: Setup - Detects Python and pip installations, sets up environment
-     * Creates virtual environment and sets up isolated Python environment
-     * Sets PYTHON_CMD and PIP_CMD environment variables for later stages
-     */
+
+    stage("Pull Python Image") {
+        script {
+            def toolName = config.project_language ?: 'python'
+
+            def toolVersion = config["${toolName}_version"] ?: DockerImageManager.getDefaultVersion(toolName)
+
+            echo "Tool: ${toolName}, Version: ${toolVersion}"
+
+            // Construct full image path using your helper
+            def imagePath = DockerImageManager.getImagePath(
+                toolName,
+                toolVersion,
+                config.nexus.registry,
+                config.nexus.project
+            )
+
+            echo "Pulling Docker image from Nexus: ${imagePath}"
+
+            // Use Docker registry with credentials
+            docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
+                def image = docker.image(imagePath)
+
+                echo "Pulling image"
+                image.pull()
+
+                // Run container and check versions
+                image.inside {
+                    sh 'python --version'
+                    sh 'pip --version'
+                    sh 'pytest --version || true'
+                }
+
+                echo "Python image ready."
+
+                env.PYTHON_DOCKER_IMAGE = imagePath
+            }
+        }
+    }
+
     stage('Setup') {
         script {
-            logger.info("SETUP STAGE")
-            core_utils.setupProjectEnvironment(config.project_language, config)
-            
-            // Check Python and Pip versions
-            bat script: PythonScript.pythonVersionCommand()
-            // sh script: PythonScript.pythonVersionCommand()  // Linux equivalent
-            bat script: PythonScript.pipVersionCommand()
-            // sh script: PythonScript.pipVersionCommand()     // Linux equivalent
-            
-            // Create virtual environment
-            logger.info("Creating virtual environment...")
-            bat script: PythonScript.createVirtualEnvCommand()
-            // sh script: PythonScript.createVirtualEnvCommand()  // Linux equivalent
-            
-            logger.info("Virtual environment created successfully")
-            stageResults['Setup'] = 'SUCCESS'
+            try {
+                logger.info("SETUP STAGE")
+                core_utils.setupProjectEnvironment(config.project_language, config)
+                sh script: PythonScript.pythonVersionCommand()
+                sh script: PythonScript.pipVersionCommand()
+                sh script: PythonScript.createVirtualEnvCommand()
+                logger.info("Virtual environment created successfully")
+                stageResults['Setup'] = 'SUCCESS'
+            } catch (Exception e) {
+                logger.error("Setup failed: ${e.message}")
+                stageResults['Setup'] = 'FAILED'
+                logger.error("Setup stage failed")
+            }
         }
     }
-    
-    /**
-     * STAGE 3: Install Dependencies - Installs Python packages from requirements.txt
-     * Uses pip in virtual environment to install all project dependencies
-     */
+
     stage('Install Dependencies') {
         script {
             logger.info("INSTALL DEPENDENCIES STAGE - Installing in virtual environment")
-            
-            // Install dependencies in virtual environment
-            bat script: PythonScript.venvPipInstallCommand()
-            // sh script: PythonScript.venvPipInstallLinuxCommand()  // Linux equivalent
-            
-            logger.info("Dependencies installed successfully in virtual environment")
-            stageResults['Install Dependencies'] = 'SUCCESS'
+
+            docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
+                def image = docker.image(env.PYTHON_DOCKER_IMAGE)
+
+                image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
+                    def result = core_build.installDependencies('python','pip', config)
+                    
+                    if (result) {
+                        stageResults['Install Dependencies'] = 'SUCCESS'
+                    } else {
+                        stageResults['Install Dependencies'] = 'FAILED'
+                        logger.error("Dependency installation failed inside core_build")
+                    }
+                }
+            }
         }
     }
-    
-    /**
-     * STAGE 4: Lint - Runs code quality checks using pylint (optional stage)
-     * Checks Python code for style violations, errors, and code quality issues
-     * Can be disabled in config, returns SUCCESS/UNSTABLE/FAILURE based on violations
-     */
+
+
     stage('Lint') {
         if (core_utils.shouldExecuteStage('lint', config)) {
             script {
@@ -95,30 +126,34 @@ def call(Map config = [:]) {
         }
     }
     
+
     stage('Build') {
         script {
             logger.info("BUILDING STAGE")
-            core_build.buildLanguages(config.project_language, config)
-            stageResults['Build'] = 'SUCCESS'
+            
+            def result = core_build.buildLanguages(config.project_language, config)
+
+            if (result) {
+                stageResults['Build'] = 'SUCCESS'
+            } else {
+                stageResults['Build'] = 'FAILED'
+                logger.error("Build failed")
+            }
         }
     }
+
     
     stage('Test Execution') {
         script {
             def parallelTests = [:]
             
-            // Add Unit Test as first parallel branch
             if (core_utils.shouldExecuteStage('unittest', config)) {
                 parallelTests['Unit Test'] = {
-                    logger.info("Running Unit Tests in virtual environment")
-                    
-                    // Run unit tests using virtual environment
-                    bat script: PythonScript.venvTestCommand()
-                    // sh script: PythonScript.venvTestLinuxCommand()  // Linux equivalent
-                    
-                    env.UNIT_TEST_RESULT = 'SUCCESS'
-                    stageResults['Unit Test'] = 'SUCCESS'
-                    logger.info("Unit test stage completed with result: SUCCESS")
+                    logger.info("Running Unit Tests")
+                    def testResult = core_test.runUnitTest(config)
+                    env.UNIT_TEST_RESULT = testResult
+                    stageResults['Unit Test'] = testResult
+                    logger.info("Unit test stage completed with result: ${testResult}")
                 }
             } else {
                 logger.info("Unit testing is disabled - skipping")
@@ -126,7 +161,6 @@ def call(Map config = [:]) {
                 stageResults['Unit Test'] = 'SKIPPED'
             }
             
-            // Add Functional Tests as second parallel branch with individual stages
             if (core_utils.shouldExecuteStage('functionaltest', config) || 
                 core_utils.shouldExecuteStage('smoketest', config) || 
                 core_utils.shouldExecuteStage('sanitytest', config) || 
@@ -135,12 +169,10 @@ def call(Map config = [:]) {
                 parallelTests['Functional Tests'] = {
                     logger.info("Starting Functional Tests with Individual Stages")
                     
-                    // Individual Stage: Smoke Tests
                     stage('Smoke Tests') {
                         if (core_utils.shouldExecuteStage('smoketest', config)) {
-                            logger.info("Running Smoke Tests in virtual environment")
-                            bat script: PythonScript.venvSmokeTestCommand()
-                            // sh script: PythonScript.venvSmokeTestLinuxCommand()  // Linux equivalent
+                            logger.info("Running Smoke Tests")
+                            sh script: PythonScript.venvSmokeTestLinuxCommand()
                             env.SMOKE_TEST_RESULT = 'SUCCESS'
                             stageResults['Smoke Tests'] = 'SUCCESS'
                             logger.info("Smoke Tests completed successfully")
@@ -150,13 +182,11 @@ def call(Map config = [:]) {
                             stageResults['Smoke Tests'] = 'SKIPPED'
                         }
                     }
-                    
-                    // Individual Stage: Sanity Tests (runs after Smoke)
+
                     stage('Sanity Tests') {
                         if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                            logger.info("Running Sanity Tests in virtual environment")
-                            bat script: PythonScript.venvSanityTestCommand()
-                            // sh script: PythonScript.venvSanityTestLinuxCommand()  // Linux equivalent
+                            logger.info("Running Sanity Tests")
+                            sh script: PythonScript.venvSanityTestLinuxCommand()
                             env.SANITY_TEST_RESULT = 'SUCCESS'
                             stageResults['Sanity Tests'] = 'SUCCESS'
                             logger.info("Sanity Tests completed successfully")
@@ -166,13 +196,11 @@ def call(Map config = [:]) {
                             stageResults['Sanity Tests'] = 'SKIPPED'
                         }
                     }
-                    
-                    // Individual Stage: Regression Tests (runs after Sanity)
+
                     stage('Regression Tests') {
                         if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                            logger.info("Running Regression Tests in virtual environment")
-                            bat script: PythonScript.venvRegressionTestCommand()
-                            // sh script: PythonScript.venvRegressionTestLinuxCommand()  // Linux equivalent
+                            logger.info("Running Regression Tests")
+                            sh script: PythonScript.venvRegressionTestLinuxCommand()
                             env.REGRESSION_TEST_RESULT = 'SUCCESS'
                             stageResults['Regression Tests'] = 'SUCCESS'
                             logger.info("Regression Tests completed successfully")
@@ -183,8 +211,11 @@ def call(Map config = [:]) {
                         }
                     }
                     
-                    env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                    logger.info("All Functional Test Stages completed")
+                    // env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
+                    def allPassed = [env.SMOKE_TEST_RESULT, env.SANITY_TEST_RESULT, env.REGRESSION_TEST_RESULT].every { it == 'SUCCESS' }
+                    env.FUNCTIONAL_TEST_RESULT = allPassed ? 'SUCCESS' : 'FAILED'
+
+                    logger.info("All Functional Test Stages completed with result: ${env.FUNCTIONAL_TEST_RESULT}")
                 }
             } else {
                 logger.info("All functional tests are disabled - skipping")
@@ -192,7 +223,6 @@ def call(Map config = [:]) {
                 stageResults['Functional Tests'] = 'SKIPPED'
             }
             
-            // Execute parallel tests if any are enabled
             if (parallelTests.size() > 0) {
                 parallel parallelTests
             } else {
@@ -203,22 +233,20 @@ def call(Map config = [:]) {
     
     stage('Generate Reports') {
         script {
-            logger.info("GENERATE REPORTS STAGE")
-            
-            // Generate Allure report and send email summary with dynamic stage results
-            sendReport.generateAndSendReports(config, stageResults)
-            stageResults['Generate Reports'] = 'SUCCESS'
+                logger.info("GENERATE REPORTS STAGE")
+                // Generate send email summary
+                sendReport.generateAndSendReports(config, stageResults)
+                stageResults['Generate Reports'] = 'SUCCESS'
         }
     }
-    
+
     stage('Cleanup') {
         script {
             logger.info("CLEANUP STAGE - Cleaning up virtual environment")
             
             try {
                 // Cleanup virtual environment
-                bat script: PythonScript.cleanupVirtualEnvCommand()
-                // sh script: PythonScript.cleanupVirtualEnvLinuxCommand()  // Linux equivalent
+                sh script: PythonScript.cleanupVirtualEnvLinuxCommand() 
                 
                 logger.info("Virtual environment cleaned up successfully")
                 stageResults['Cleanup'] = 'SUCCESS'

@@ -6,42 +6,49 @@
  */
 def runLint(Map config = [:]) {
     logger.info("Starting lint")
+
+    return docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
+        def image = docker.image(env.PYTHON_DOCKER_IMAGE)
+        
+        return image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
     
-    try {
-        def language = config.project_language
-        def lintTool = getLintTool(language, config)
-        logger.info("Running lint for ${language} using ${lintTool}")
+            try {
+                def language = config.project_language
+                def lintTool = getLintTool(language, config)
+                logger.info("Running lint for ${language} using ${lintTool}")
 
-        def result = false
-        switch(language) {
-            case ['java-maven', 'java-gradle']:
-                result = runJavaLint(language, lintTool, config)
-                break
-            case 'python':
-                result = runPythonLint(lintTool, config)
-                break
-            default:
-                logger.error("Unsupported language for lint: ${language}")
-                return 'FAILED'
-        }
+                def result = false
+                switch(language) {
+                    case ['java-maven', 'java-gradle']:
+                        result = runJavaLint(language, lintTool, config)
+                        break
+                    case 'python':
+                        result = runPythonLint(lintTool, config)
+                        break
+                    default:
+                        logger.error("Unsupported language for lint: ${language}")
+                        return 'FAILED'
+                }
 
-        // Process lint results and set appropriate build status
-        if (result == true) {
-            logger.info("Lint completed successfully")
-            return 'SUCCESS'
-        } else if (result == 'UNSTABLE') {
-            logger.warning("Lint found violations - marking build as UNSTABLE")
-            currentBuild.result = 'UNSTABLE'
-            return 'UNSTABLE'
-        } else {
-            logger.error("Lint failed critically")
-            currentBuild.result = 'UNSTABLE'
-            return 'UNSTABLE'
+                // Process lint results and set appropriate build status
+                if (result == true) {
+                    logger.info("Lint completed successfully")
+                    return 'SUCCESS'
+                } else if (result == 'UNSTABLE') {
+                    logger.warning("Lint found violations - marking build as UNSTABLE")
+                    currentBuild.result = 'UNSTABLE'
+                    return 'UNSTABLE'
+                } else {
+                    logger.error("Lint failed critically")
+                    currentBuild.result = 'UNSTABLE'
+                    return 'UNSTABLE'
+                }
+            } catch (Exception e) {
+                logger.error("Lint execution failed: ${e.getMessage()}")
+                currentBuild.result = 'UNSTABLE'
+                return 'UNSTABLE'
+            }
         }
-    } catch (Exception e) {
-        logger.error("Lint execution failed: ${e.getMessage()}")
-        currentBuild.result = 'UNSTABLE'
-        return 'UNSTABLE'
     }
 }
 
@@ -56,14 +63,11 @@ private def runJavaLint(String language, String lintTool, Map config) {
     }
 
     try {
-        bat script: command
-        // sh script: command  // Linux equivalent
+        sh script: command
         logger.info("Lint passed with no violations")
         return true
     } catch (Exception e) {
         logger.warning("Lint found violations but continuing pipeline: ${e.getMessage()}")
-        
-        // Check if lint results exist (lint ran but found violations)
         if (fileExists('target/checkstyle-result.xml') || fileExists('build/reports/checkstyle')) {
             logger.info("Lint results found - violations detected, marking as UNSTABLE")
             return 'UNSTABLE'
@@ -78,14 +82,12 @@ private def runPythonLint(String lintTool, Map config) {
     logger.info("Executing Python lint with ${lintTool} in virtual environment")
     
     try {
-        bat script: PythonScript.venvLintCommand(lintTool)
-        // sh script: PythonScript.venvLintLinuxCommand(lintTool)  // Linux equivalent
+        sh script: PythonScript.venvLintLinuxCommand(lintTool)
         logger.info("Python lint passed with no violations")
         return true
     } catch (Exception e) {
         logger.warning("Python lint found violations but continuing pipeline: ${e.getMessage()}")
         
-        // Check if lint results exist
         if (fileExists('pylint-report.txt') || fileExists('flake8-report.txt')) {
             logger.info("Lint results found - violations detected, marking as UNSTABLE")
             return 'UNSTABLE'
@@ -104,5 +106,3 @@ private String getLintTool(String language, Map config) {
     }
     throw new Exception("No lint tool configured for language: ${language}")
 }
-
-

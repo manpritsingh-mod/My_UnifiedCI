@@ -2,21 +2,23 @@
  * Java Maven Pipeline Template - Executes complete Maven-based Java CI/CD pipeline
  * Handles Maven project build, test, lint, and reporting with comprehensive error handling
  * @param config Pipeline configuration map (optional, uses defaults if not provided)
- * Usage: javaMaven_template() or javaMaven_template([project_language: 'java-maven', runLintTests: false])
+ * Usage: javaMaven_template() or javaMaven_template([project_language: 'java-maven', runLintTests: false]etc)
  */
 def call(Map config = [:]) {
     logger.info("Starting Java Maven Template Pipeline")
     
-    // Use default configuration if not passed
     if (!config) {
         logger.info("No config provided, using default configuration")
-        config = core_utils.getDefaultConfig()
+        config = core_utils.getDefaultConfig()  // Use default configuration if not passed
     }
-    
+
+    if (!config.nexus?.registry || !config.nexus?.credentials_id || !config.nexus?.url) {
+        logger.error("Missing Nexus configuration. Please give nexus.registry, nexus.url and nexus.credentials_id")
+    }
+
     // Initialize stage results tracking for email reporting
     def stageResults = [:]
-    
-    // Execute Maven-specific pipeline stages
+
     stage('Checkout') {
         script {
             logger.info("CHECKOUT STAGE")
@@ -24,26 +26,78 @@ def call(Map config = [:]) {
             stageResults['Checkout'] = 'SUCCESS'
         }
     }
-    
-    stage('Setup') {
+
+    stage("Pull Java Maven Image") {
         script {
-            logger.info("SETUP STAGE")
-            core_utils.setupProjectEnvironment(config.project_language, config)
-            bat script: MavenScript.javaVersionCommand()
-            // sh script: MavenScript.javaVersionCommand()  // Linux equivalent
-            bat script: MavenScript.mavenVersionCommand()
-            // sh script: MavenScript.mavenVersionCommand()   // Linux equivalent
-            stageResults['Setup'] = 'SUCCESS'
+            def toolName = config.project_language ?: 'java-maven'
+            def toolVersion = config["${toolName}_version"] ?: DockerImageManager.getDefaultVersion(toolName)
+
+            echo "Tool: ${toolName}, Version: ${toolVersion}"
+
+            def imagePath = DockerImageManager.getImagePath(
+                toolName,
+                toolVersion,
+                config.nexus.registry,
+                config.nexus.project
+            )
+
+            echo "Pulling Docker image from Nexus: ${imagePath}"
+
+            docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
+                def image = docker.image(imagePath)
+
+                echo "Pulling image"
+                image.pull()
+
+                image.inside {
+                    sh 'java -version || true'
+                    sh 'mvn -v || true'
+                }
+
+                echo "Java Maven image ready"
+                env.JAVA_MAVEN_DOCKER_IMAGE = imagePath
+            }
         }
     }
+
+    stage('Setup') {
+        script {
+            try{
+            logger.info("SETUP STAGE")
+            core_utils.setupProjectEnvironment(config.project_language, config)
+            sh script: MavenScript.javaVersionCommand()
+            sh script: MavenScript.mavenVersionCommand()
+            stageResults['Setup'] = 'SUCCESS'
+            } catch (Exception e) {
+                logger.error("Setup failed: ${e.message}")
+                stageResults['Setup'] = 'FAILED'
+                logger.error("Setup stage failed")
+            }
+        }
+    }
+
     
     stage('Install Dependencies') {
         script {
             logger.info("INSTALL DEPENDENCIES STAGE")
-            core_build.installDependencies('java', 'maven', config)
-            stageResults['Install Dependencies'] = 'SUCCESS'
+
+            docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
+                    def image = docker.image(env.JAVA_MAVEN_DOCKER_IMAGE)
+                    
+                image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
+                    def result = core_build.installDependencies('java', 'maven', config)
+
+                    if (result) {
+                            stageResults['Install Dependencies'] = 'SUCCESS'
+                    } else {
+                        stageResults['Install Dependencies'] = 'FAILED'
+                        logger.error("Dependency installation failed inside core_build")
+                    }
+                }
+            }
         }
     }
+
     
     stage('Lint') {
         if (core_utils.shouldExecuteStage('lint', config)) {
@@ -62,20 +116,25 @@ def call(Map config = [:]) {
             }
         }
     }
-    
+
     stage('Build') {
         script {
             logger.info("BUILDING STAGE")
-            core_build.buildLanguages(config.project_language, config)
+            def result = core_build.buildLanguages(config.project_language, config)
+
+            if(result) {
             stageResults['Build'] = 'SUCCESS'
+            } else {
+                stageResults['Build'] = 'FAILED'
+                logger.error("Build failed")
+            }
         }
     }
-    
+
     stage('Test Execution') {
         script {
             def parallelTests = [:]
             
-            // Add Unit Test as first parallel branch
             if (core_utils.shouldExecuteStage('unittest', config)) {
                 parallelTests['Unit Test'] = {
                     logger.info("Running Unit Tests")
@@ -89,8 +148,7 @@ def call(Map config = [:]) {
                 env.UNIT_TEST_RESULT = 'SKIPPED'
                 stageResults['Unit Test'] = 'SKIPPED'
             }
-            
-            // Add Functional Tests as second parallel branch with individual stages
+
             if (core_utils.shouldExecuteStage('functionaltest', config) || 
                 core_utils.shouldExecuteStage('smoketest', config) || 
                 core_utils.shouldExecuteStage('sanitytest', config) || 
@@ -99,12 +157,10 @@ def call(Map config = [:]) {
                 parallelTests['Functional Tests'] = {
                     logger.info("Starting Functional Tests with Individual Stages")
                     
-                    // Individual Stage: Smoke Tests
                     stage('Smoke Tests') {
                         if (core_utils.shouldExecuteStage('smoketest', config)) {
                             logger.info("Running Smoke Tests")
-                            bat script: MavenScript.smokeTestCommand()
-                            // sh script: MavenScript.smokeTestCommand()  // Linux equivalent
+                            sh script: MavenScript.smokeTestCommand()
                             env.SMOKE_TEST_RESULT = 'SUCCESS'
                             stageResults['Smoke Tests'] = 'SUCCESS'
                             logger.info("Smoke Tests completed successfully")
@@ -115,12 +171,10 @@ def call(Map config = [:]) {
                         }
                     }
                     
-                    // Individual Stage: Sanity Tests (runs after Smoke)
                     stage('Sanity Tests') {
                         if (core_utils.shouldExecuteStage('sanitytest', config)) {
                             logger.info("Running Sanity Tests")
-                            bat script: MavenScript.sanityTestCommand()
-                            // sh script: MavenScript.sanityTestCommand()  // Linux equivalent
+                            sh script: MavenScript.sanityTestCommand()
                             env.SANITY_TEST_RESULT = 'SUCCESS'
                             stageResults['Sanity Tests'] = 'SUCCESS'
                             logger.info("Sanity Tests completed successfully")
@@ -131,12 +185,10 @@ def call(Map config = [:]) {
                         }
                     }
                     
-                    // Individual Stage: Regression Tests (runs after Sanity)
                     stage('Regression Tests') {
                         if (core_utils.shouldExecuteStage('regressiontest', config)) {
                             logger.info("Running Regression Tests")
-                            bat script: MavenScript.regressionTestCommand()
-                            // sh script: MavenScript.regressionTestCommand()  // Linux equivalent
+                            sh script: MavenScript.regressionTestCommand()
                             env.REGRESSION_TEST_RESULT = 'SUCCESS'
                             stageResults['Regression Tests'] = 'SUCCESS'
                             logger.info("Regression Tests completed successfully")
@@ -168,8 +220,6 @@ def call(Map config = [:]) {
     stage('Generate Reports') {
         script {
             logger.info("GENERATE REPORTS STAGE")
-            
-            // Generate Allure report and send email summary with dynamic stage results
             sendReport.generateAndSendReports(config, stageResults)
             stageResults['Generate Reports'] = 'SUCCESS'
         }

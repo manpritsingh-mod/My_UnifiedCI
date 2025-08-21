@@ -115,6 +115,33 @@ def readProjectConfig() {
     return validateAndSetDefaults(config)
 }
 
+private def setupDockerConfig(Map config) {
+    if (!config.project_language) {
+        config.project_language = 'python'
+    }
+    
+    // Docker/Nexus configuration
+    if (!config.nexus) {
+        config.nexus = [:]
+    }
+    config.nexus.url = config.nexus.url ?: 'http://localhost:9092'
+    config.nexus.registry = config.nexus.registry ?: 'localhost:9092'
+    config.nexus.project = config.nexus.project ?: 'dev'
+    config.nexus.credentials_id = config.nexus.credentials_id ?: 'nexus-docker-creds'
+    
+    // Python version
+    config.python_version = config.python_version ?: '3.11'
+    
+    // Test configuration
+    if (!config.tool_for_unit_testing) {
+        config.tool_for_unit_testing = [python: 'pytest']
+    }
+    if (!config.tool_for_lint_testing) {
+        config.tool_for_lint_testing = [python: 'pylint']
+    }
+    
+    return config
+}
 
 def validateAndSetDefaults(Map config){
     if (!config.project_language){
@@ -140,8 +167,6 @@ def validateAndSetDefaults(Map config){
     if (config.runFunctionalTests == null) {
         config.runFunctionalTests = true
     }
-    
-    // Set individual functional test defaults
     if (config.runSmokeTests == null) {
         config.runSmokeTests = true
     }
@@ -167,7 +192,6 @@ def validateAndSetDefaults(Map config){
 }
 
 
-
 /**
  * Creates default pipeline configuration when no ci-config.yaml file exists
  * @return Map default configuration with all stages enabled and standard tools
@@ -181,7 +205,6 @@ def getDefaultConfig(){
         runUnitTests: true,
         runLintTests: true,
         runFunctionalTests: true,
-        // Individual functional test controls
         runSmokeTests: true,
         runSanityTests: true,
         runRegressionTests: true,
@@ -251,5 +274,3 @@ def shouldExecuteStage(String stageName, Map config){
             return true
     }
 }
-
-

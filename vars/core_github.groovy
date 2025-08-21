@@ -4,7 +4,7 @@
  * @param branch Git branch to checkout (optional, defaults to 'main')
  * @param config Pipeline configuration map containing branch info
  * @return Boolean true if checkout succeeds, false if it fails
- * Usage: def success = core_github.checkout('https://github.com/user/repo.git', 'develop')
+ * Usage: eg = core_github.checkout('url', 'develop')
  */
 def checkout(String repoURL = '', String branch = '', Map config = [:]) {
     if (!repoURL?.trim()) {
@@ -22,7 +22,7 @@ def checkout(String repoURL = '', String branch = '', Map config = [:]) {
     logger.info("Checking out ${repoURL} on branch ${checkoutBranch}")
     
     try {
-        // Use GitHubManager to get SCM configuration
+        // Use GitHubManager in src to get SCM configuration
         def scmConfig = GitHubManager.getCheckoutScmConfig(repoURL, checkoutBranch)
         checkout(scmConfig)
         return true
@@ -36,11 +36,11 @@ def checkout(String repoURL = '', String branch = '', Map config = [:]) {
  * Validates if a Git repository is accessible by running git ls-remote command
  * @param repoUrl Git repository URL to validate
  * @return Boolean true if repository is accessible, false if not
- * Usage: def isValid = core_github.validateRepoAccess('https://github.com/user/repo.git')
+ * Usage: eg = core_github.validateRepoAccess('url')
  */
 def validateRepoAccess(String repoUrl) {
     try {
-        // Use GitHubManager to get validation configuration
+        // Use GitHubManager in src to get validation configuration
         def validationResult = GitHubManager.validateRepoAccess(repoUrl)
         
         if (!validationResult.valid) {
@@ -48,8 +48,8 @@ def validateRepoAccess(String repoUrl) {
             return false
         }
         
-        def timeout = 5 // seconds - prevent hanging on unreachable repos
-        def status = bat(
+        def timeout = 5 // seconds
+        def status = sh(
             script: validationResult.command,
             returnStatus: true,
             timeout: timeout
