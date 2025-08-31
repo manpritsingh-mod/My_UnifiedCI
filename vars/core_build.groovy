@@ -6,32 +6,22 @@
 * Usage: core_build.buildLanguages('python', config)
 */
 def buildLanguages(String language, Map config = [:]) {
-    logger.info("Starting Docker-based build for ${language}")
+    logger.info("Starting build for ${language}")
 
-    def version = config["${language}_version"] ?: DockerImageManager.getDefaultVersion(language)
-    def imagePath = DockerImageManager.getImagePath(
-        language,
-        version,
-        config.nexus?.registry ?: 'localhost:9092',
-        config.nexus?.project ?: 'dev'
-    )
-
-    logger.info("Using Docker image: ${imagePath}")
-
+    // NOTE: This method is called from INSIDE Docker containers in templates
+    // So we don't need to create another Docker container here
+    
     def result = false
-
-    docker.withRegistry(config.nexus?.url ?: 'http://localhost:9092', config.nexus?.credentials_id ?: 'nexus-docker-creds') {
-        def image = docker.image(imagePath)
-        image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
-            if (language in ['java-maven', 'java-gradle']) {
-                result = buildJavaApp(language == 'java-maven' ? 'maven' : 'gradle', config)
-            } else if (language == 'python') {
-                result = buildPythonApp(config)
-            } else {
-                logger.error("Unsupported language: ${language}")
-                result = false
-            }
-        }
+    
+    if (language in ['java-maven', 'java-gradle']) {
+        result = buildJavaApp(language == 'java-maven' ? 'maven' : 'gradle', config)
+    } else if (language == 'python') {
+        result = buildPythonApp(config)
+    } else if (language in ['react', 'nodejs']) {
+        result = buildReactApp(config)
+    } else {
+        logger.error("Unsupported language: ${language}")
+        result = false
     }
 
     return result
@@ -144,6 +134,32 @@ private Boolean task_buildPythonApp(Map config) {
 }
 
 /**
+* Getting call by the buildLanguages & further calling task_buildReactApp()
+*/
+def buildReactApp(Map config = [:]) {
+    logger.info("Building React app")
+    try{
+        return task_buildReactApp(config)
+    }
+    catch(Exception e){
+        logger.error("React Build error: ${e.getMessage()}")
+        return false
+    }
+}
+
+/**
+* Executes React Build command
+* @param config Pipeline configuration map
+* return Boolean true when build executes successfully
+*/
+private Boolean task_buildReactApp(Map config) {
+    logger.info("React build logic execution")
+    sh script: ReactScript.buildCommand()
+    logger.info("React build executed successfully")
+    return true
+}
+
+/**
  * Installs project dependencies for different programming languages and build tools
  * @param language Programming language ('java' or 'python')
  * @param buildTool Build tool ('maven', 'gradle', or 'pip')
@@ -152,20 +168,25 @@ private Boolean task_buildPythonApp(Map config) {
  * Usage: core_build.installDependencies('java', 'maven', config)
  */
 def installDependencies(String language, String buildTool, Map config = [:]){
-    logger.info("Installing the dependencies for the ${language} with ${buildTool}")
-
-    try{
-        switch(language){
+    logger.info("Installing dependencies for ${language} with ${buildTool}")
+    
+    // NOTE: This method is called from INSIDE Docker containers in templates
+    // So we don't need to create another Docker container here
+    
+    try {
+        switch(language) {
             case 'java':
                 return installJavaDependencies(buildTool, config)
             case 'python':
                 return installPythonDependencies(config)
+            case 'react':
+            case 'nodejs':
+                return installReactDependencies(config)
             default:
-                logger.error("Unsupported language for dependencies installation")
+                logger.error("Unsupported language for dependencies installation: ${language}")
                 return false
         }
-    }
-    catch(Exception e){
+    } catch (Exception e) {
         logger.error("Dependencies installation failed: ${e.getMessage()}")
         return false
     }
@@ -257,4 +278,39 @@ def task_pythonDependencies(Map config = [:]){
 
     logger.info("Python Dependencies installed successfully")
     return true
+}
+/**
+
+ * Installs React/Node.js dependencies using npm or yarn
+ * @param config Pipeline configuration map
+ * @return Boolean true if installation succeeds, false if it fails
+ */
+def installReactDependencies(Map config = [:]){
+    logger.info("Installing React/Node.js Dependencies")
+
+    try {
+        return task_reactDependencies(config)
+    } catch (Exception e) {
+        logger.error("React Dependencies installation failed: ${e.getMessage()}")
+        return false
+    }
+}
+
+/**
+ * Handles the logic for installing React dependencies using npm or yarn
+ * Assumes `package.json` is present in the root directory
+ * @param config Optional configuration map for React dependency logic
+ * @return Boolean true after successful installation, false otherwise
+ */
+def task_reactDependencies(Map config = [:]){
+    logger.info("React Dependencies logic")
+
+    if (fileExists('package.json')) {
+        sh script: ReactScript.installDependenciesCommand()
+        logger.info("React Dependencies installed successfully")
+        return true
+    } else {
+        logger.warning("No package.json found - skipping dependency installation")
+        return true
+    }
 }

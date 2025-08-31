@@ -1,0 +1,48 @@
+# Basic CI/CD Configuration File
+project_language: "python"
+runUnitTests: true
+runLintTests: true
+runFunctionalTests: true
+
+# Docker & Nexus Configuration
+nexus:
+  url: "https://nexus.company.com:8082"
+  registry: "nexus.company.com:8082"
+  project: "dev"
+  credentials_id: "nexus-docker-creds"
+
+# Tool Versions (specify versions to pull from Nexus)
+python_version: "3.11"
+java-maven_version: "3.8.6"
+java-gradle_version: "7.6.1"
+react_version: "18"          # Node.js version for React projects
+nodejs_version: "18"         # Node.js version for Node.js projects
+
+# Note: React/Node.js projects now use npm by default (packageManager setting removed for simplicity)
+
+tool_for_unit_testing:
+  python: pytest
+  java: junit
+  react: jest              # Options: jest, react-testing-library
+  nodejs: jest
+
+tool_for_lint_testing:
+  python: pylint
+  java: checkstyle
+  react: eslint            # Options: eslint, prettier, tslint
+  nodejs: eslint
+
+# Stage Execution Control
+runSmokeTests: true
+runSanityTests: true
+runRegressionTests: true
+
+
+# Basic Notification Configuration
+notifications:
+  email:
+    recipients: 
+      - "smanprit022@gmail.com"
+  slack:
+    enabled: false           # Set to true when you get Slack access
+    channel: "#builds"

@@ -1,19 +1,26 @@
 /**
- * Java Maven Pipeline Template - Executes complete Maven-based Java CI/CD pipeline
- * Handles Maven project build, test, lint, and reporting with comprehensive error handling
+ * React Pipeline Template - Executes complete React CI/CD pipeline
+ * Handles React project build, test, lint, and reporting with comprehensive error handling
  * @param config Pipeline configuration map (optional, uses defaults if not provided)
- * Usage: javaMaven_template() or javaMaven_template([project_language: 'java-maven', runLintTests: false]etc)
+ * Usage: react_template() or react_template([project_language: 'react'])
  */
 def call(Map config = [:]) {
-    logger.info("Starting Java Maven Template Pipeline")
+    logger.info("Starting React Template Pipeline")
     
+    // Use default configuration if not passed
     if (!config) {
         logger.info("No config provided, using default configuration")
-        config = core_utils.getDefaultConfig()  // Use default configuration if not passed
+        config = core_utils.getDefaultConfig()
     }
 
+    // Validate configuration before starting
+    def validation = DockerImageManager.validateDockerConfig(config)
+    if (!validation.valid) {
+        error "Configuration validation failed: ${validation.message}"
+    }
+    
     if (!config.nexus?.registry || !config.nexus?.credentials_id || !config.nexus?.url) {
-        logger.error("Missing Nexus configuration. Please give nexus.registry, nexus.url and nexus.credentials_id")
+        error "Missing Nexus configuration. Please provide 'nexus.registry', 'nexus.url', and 'nexus.credentials_id'."
     }
 
     // Initialize stage results tracking for email reporting
@@ -29,54 +36,65 @@ def call(Map config = [:]) {
 
     // Pull Docker image and run ALL stages inside single container session
     script {
-        logger.info("PULLING MAVEN IMAGE FROM NEXUS")
+        logger.info("PULLING NODE.JS IMAGE FROM NEXUS")
         
-        // Use DockerImageManager to get correct image configuration
         def imageConfig = DockerImageManager.getImageConfig(config.project_language, config)
         logger.info("Pulling Docker image: ${imageConfig.imagePath}")
-
+        
         docker.withRegistry(imageConfig.registryUrl, imageConfig.credentialsId) {
             def image = docker.image(imageConfig.imagePath)
-
+            
             logger.info("⬇️ Pulling image...")
-            image.pull()
-
+            // Check if image exists locally first
+            def imageExists = sh(
+                script: "docker images -q ${imageConfig.imagePath}",
+                returnStdout: true
+            ).trim()
+            
+            if (!imageExists) {
+                logger.info("Image not found locally, pulling from registry...")
+                retry(3) {
+                    try {
+                        image.pull()
+                    } catch (Exception e) {
+                        logger.warning("Image pull attempt failed: ${e.getMessage()}")
+                        sleep(5) // Wait 5 seconds before retry
+                        throw e
+                    }
+                }
+            } else {
+                logger.info("Using cached Docker image")
+            }
+            
             // Verify image works
             image.inside {
-                sh 'java -version'
-                sh 'mvn --version'
+                sh 'node --version'
+                sh 'npm --version'
             }
-
-            logger.info("✅ Maven image ready!")
-            env.JAVA_MAVEN_DOCKER_IMAGE = imageConfig.imagePath
+            
+            logger.info("✅ Node.js image ready!")
+            env.REACT_DOCKER_IMAGE = imageConfig.imagePath
             stageResults['Pull Image'] = 'SUCCESS'
             
             // Run ALL stages inside this single Docker container session
             image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
                 
                 stage('Setup') {
-                    try{
-                        logger.info("SETUP STAGE")
-                        core_utils.setupProjectEnvironment(config.project_language, config)
-                        sh script: MavenScript.javaVersionCommand()
-                        sh script: MavenScript.mavenVersionCommand()
-                        stageResults['Setup'] = 'SUCCESS'
-                    } catch (Exception e) {
-                        logger.error("Setup failed: ${e.message}")
-                        stageResults['Setup'] = 'FAILED'
-                        throw e
-                    }
+                    logger.info("SETUP STAGE")
+                    core_utils.setupProjectEnvironment(config.project_language, config)
+                    sh script: ReactScript.nodeVersionCommand()
+                    stageResults['Setup'] = 'SUCCESS'
                 }
 
                 stage('Install Dependencies') {
                     logger.info("INSTALL DEPENDENCIES STAGE")
-                    def result = core_build.installDependencies('java', 'maven', config)
-
+                    def result = core_build.installDependencies('react', 'npm', config)
+                    
                     if (result) {
                         stageResults['Install Dependencies'] = 'SUCCESS'
                     } else {
                         stageResults['Install Dependencies'] = 'FAILED'
-                        logger.error("Dependency installation failed inside core_build")
+                        logger.error("Dependency installation failed")
                     }
                 }
 
@@ -98,7 +116,7 @@ def call(Map config = [:]) {
                     logger.info("BUILDING STAGE")
                     def result = core_build.buildLanguages(config.project_language, config)
 
-                    if(result) {
+                    if (result) {
                         stageResults['Build'] = 'SUCCESS'
                     } else {
                         stageResults['Build'] = 'FAILED'
@@ -122,7 +140,7 @@ def call(Map config = [:]) {
                         env.UNIT_TEST_RESULT = 'SKIPPED'
                         stageResults['Unit Test'] = 'SKIPPED'
                     }
-
+                    
                     if (core_utils.shouldExecuteStage('functionaltest', config) || 
                         core_utils.shouldExecuteStage('smoketest', config) || 
                         core_utils.shouldExecuteStage('sanitytest', config) || 
@@ -135,7 +153,7 @@ def call(Map config = [:]) {
                             stage('Smoke Tests') {
                                 if (core_utils.shouldExecuteStage('smoketest', config)) {
                                     logger.info("Running Smoke Tests")
-                                    sh script: MavenScript.smokeTestCommand()
+                                    sh script: ReactScript.smokeTestCommand()
                                     env.SMOKE_TEST_RESULT = 'SUCCESS'
                                     stageResults['Smoke Tests'] = 'SUCCESS'
                                     logger.info("Smoke Tests completed successfully")
@@ -149,7 +167,7 @@ def call(Map config = [:]) {
                             stage('Sanity Tests') {
                                 if (core_utils.shouldExecuteStage('sanitytest', config)) {
                                     logger.info("Running Sanity Tests")
-                                    sh script: MavenScript.sanityTestCommand()
+                                    sh script: ReactScript.sanityTestCommand()
                                     env.SANITY_TEST_RESULT = 'SUCCESS'
                                     stageResults['Sanity Tests'] = 'SUCCESS'
                                     logger.info("Sanity Tests completed successfully")
@@ -163,7 +181,7 @@ def call(Map config = [:]) {
                             stage('Regression Tests') {
                                 if (core_utils.shouldExecuteStage('regressiontest', config)) {
                                     logger.info("Running Regression Tests")
-                                    sh script: MavenScript.regressionTestCommand()
+                                    sh script: ReactScript.regressionTestCommand()
                                     env.REGRESSION_TEST_RESULT = 'SUCCESS'
                                     stageResults['Regression Tests'] = 'SUCCESS'
                                     logger.info("Regression Tests completed successfully")
@@ -174,8 +192,20 @@ def call(Map config = [:]) {
                                 }
                             }
                             
-                            env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                            logger.info("All Functional Test Stages completed")
+                            // Determine overall functional test result
+                            def testResults = [env.SMOKE_TEST_RESULT, env.SANITY_TEST_RESULT, env.REGRESSION_TEST_RESULT]
+                            def allPassed = testResults.every { it == 'SUCCESS' || it == 'SKIPPED' }
+                            def anyFailed = testResults.any { it == 'FAILED' }
+                            
+                            if (anyFailed) {
+                                env.FUNCTIONAL_TEST_RESULT = 'FAILED'
+                            } else if (allPassed && testResults.any { it == 'SUCCESS' }) {
+                                env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
+                            } else {
+                                env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
+                            }
+
+                            logger.info("All Functional Test Stages completed with result: ${env.FUNCTIONAL_TEST_RESULT}")
                         }
                     } else {
                         logger.info("All functional tests are disabled - skipping")
@@ -183,13 +213,14 @@ def call(Map config = [:]) {
                         stageResults['Functional Tests'] = 'SKIPPED'
                     }
                     
-                    // Execute parallel tests if any are enabled
                     if (parallelTests.size() > 0) {
                         parallel parallelTests
                     } else {
                         logger.info("No tests are enabled - skipping test execution")
                     }
                 }
+
+
             } // End of Docker container session
         } // End of Docker registry
     } // End of script block
@@ -197,8 +228,27 @@ def call(Map config = [:]) {
     stage('Generate Reports') {
         script {
             logger.info("GENERATE REPORTS STAGE")
+            // Generate and send email summary
             sendReport.generateAndSendReports(config, stageResults)
             stageResults['Generate Reports'] = 'SUCCESS'
         }
     }
+
+    stage('Cleanup') {
+        script {
+            logger.info("CLEANUP STAGE - Cleaning up React build artifacts")
+            
+            try {
+                // Cleanup build artifacts and cache
+                sh script: "rm -rf build/ dist/ coverage/ node_modules/.cache/"
+                
+                logger.info("React cleanup completed successfully")
+                stageResults['Cleanup'] = 'SUCCESS'
+            } catch (Exception e) {
+                logger.warning("Cleanup failed, but continuing: ${e.getMessage()}")
+                stageResults['Cleanup'] = 'WARNING'
+            }
+        }
+    }
 }
+

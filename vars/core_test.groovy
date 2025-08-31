@@ -20,6 +20,9 @@ def runUnitTest(Map config = [:]) {
                     case 'python':
                         result = runPythonUnitTest(testTool, config)
                         break
+                    case ['react', 'nodejs']:
+                        result = runReactUnitTest(testTool, config)
+                        break
                     default:
                         logger.error("Unsupported language for unit tests: ${language}")
                         return 'FAILED'
@@ -54,19 +57,19 @@ def runUnitTest(Map config = [:]) {
 private def runJavaUnitTest(String language, String testTool, Map config) {
     logger.info("Executing Java unit tests with ${testTool}")
     
-    def command
-    if (language == 'java-maven') {
-        command = MavenScript.testCommand(testTool)
-    } else {
-        command = GradleScript.testCommand(testTool)
-    }
+    // NOTE: This method is called from INSIDE Docker containers in templates
+    // So we don't need to create another Docker container here
+    
+    def command = (language == 'java-maven') ? 
+        MavenScript.testCommand(testTool) : 
+        GradleScript.testCommand(testTool)
 
     try {
         sh script: command
-        logger.info("Unit tests passed successfully")
+        logger.info("Java unit tests passed successfully")
         return true
     } catch (Exception e) {
-        logger.warning("Unit tests failed but continuing pipeline: ${e.getMessage()}")
+        logger.warning("Java unit tests failed but continuing pipeline: ${e.getMessage()}")
         
         if (fileExists('target/surefire-reports') || fileExists('build/test-results')) {
             logger.info("Test results found - tests ran but some failed, marking as UNSTABLE")
@@ -87,41 +90,73 @@ private def runJavaUnitTest(String language, String testTool, Map config) {
 private def runPythonUnitTest(String testTool, Map config) {
     logger.info("Executing Python unit tests with ${testTool}")
 
-    docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
-        def image = docker.image(env.PYTHON_DOCKER_IMAGE)
-        return image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
+    // NOTE: This method is called from INSIDE Docker containers in templates
+    // So we don't need to create another Docker container here
+
+    try {
+        sh script: PythonScript.venvTestLinuxCommand(testTool)
+        logger.info("Python unit tests passed successfully")
+        return true
+    } catch (Exception e) {
+        logger.warning("Python unit tests failed but continuing pipeline: ${e.getMessage()}")
     
-            try {
-                sh script: PythonScript.venvTestLinuxCommand()
-                logger.info("Python unit tests passed successfully")
-                return true
-            } catch (Exception e) {
-                logger.warning("Python unit tests failed but continuing pipeline: ${e.getMessage()}")
-            
-                if (fileExists('test-results.xml') || fileExists('pytest-report.xml')) {
-                    logger.info("Test results found - tests ran but some failed, marking as UNSTABLE")
-                    return 'UNSTABLE'
-                } else {
-                    logger.error("No test results found - critical test failure")
-                    return 'UNSTABLE'
-                }
-            }
+        if (fileExists('test-results.xml') || fileExists('pytest-report.xml')) {
+            logger.info("Test results found - tests ran but some failed, marking as UNSTABLE")
+            return 'UNSTABLE'
+        } else {
+            logger.error("No test results found - critical test failure")
+            return 'UNSTABLE'
         }
     }
 }
 
 /**
+ * Executes React unit tests using Jest or other React testing frameworks
+ * @param testTool Test framework to use ('jest', 'react-testing-library')
+ * @param config Pipeline configuration
+ * @return Boolean true (success) or String 'UNSTABLE' (some tests failed)
+ */
+private def runReactUnitTest(String testTool, Map config) {
+    logger.info("Executing React unit tests with ${testTool}")
+
+    // NOTE: This method is called from INSIDE Docker containers in templates
+    // So we don't need to create another Docker container here
+    
+    try {
+        sh script: ReactScript.testCommand(testTool)
+        logger.info("React unit tests passed successfully")
+        return true
+    } catch (Exception e) {
+        logger.warning("React unit tests failed but continuing pipeline: ${e.getMessage()}")
+    
+        if (fileExists('coverage/') || fileExists('test-results.xml') || fileExists('junit.xml')) {
+            logger.info("Test results found - tests ran but some failed, marking as UNSTABLE")
+            return 'UNSTABLE'
+        } else {
+            logger.error("No test results found - critical test failure")
+            return 'UNSTABLE'
+        }
+    }
+}
+
+
+
+/**
  * Gets the appropriate unit test tool for the specified programming language
- * @param language Project language ('java-maven', 'java-gradle', or 'python')
+ * @param language Project language ('java-maven', 'java-gradle', 'python', 'react', 'nodejs')
  * @param config Pipeline configuration containing tool preferences
- * @return String name of test tool to use (junit, pytest, etc.)
- * Usage: eg = getUnitTestTool('python', config) // Returns 'pytest'
+ * @return String name of test tool to use (junit, pytest, jest, etc.)
+ * Usage: eg = getUnitTestTool('react', config) // Returns 'jest'
  */
 private String getUnitTestTool(String language, Map config) {
     if (language in ['java-maven', 'java-gradle']) {
         return config.tool_for_unit_testing?.java ?: 'junit'
     } else if (language == 'python') {
         return config.tool_for_unit_testing?.python ?: 'pytest'
+    } else if (language == 'react') {
+        return config.tool_for_unit_testing?.react ?: 'jest'
+    } else if (language == 'nodejs') {
+        return config.tool_for_unit_testing?.nodejs ?: 'jest'
     }
     throw new Exception("No test tool configured for language: ${language}")
 }

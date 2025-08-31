@@ -13,6 +13,12 @@ def call(Map config = [:]) {
         config = core_utils.getDefaultConfig()
     }
 
+    // Validate configuration before starting
+    def validation = DockerImageManager.validateDockerConfig(config)
+    if (!validation.valid) {
+        error "Configuration validation failed: ${validation.message}"
+    }
+    
     if (!config.nexus?.registry || !config.nexus?.credentials_id || !config.nexus?.url) {
         error "Missing Nexus configuration. Please provide 'nexus.registry', 'nexus.url', and 'nexus.credentials_id'."
     }
@@ -29,71 +35,64 @@ def call(Map config = [:]) {
         }
     }
 
-    stage("Pull Python Image") {
-        script {
-            def toolName = config.project_language ?: 'python'
-
-            def toolVersion = config["${toolName}_version"] ?: DockerImageManager.getDefaultVersion(toolName)
-
-            echo "Tool: ${toolName}, Version: ${toolVersion}"
-
-            // Construct full image path using your helper
-            def imagePath = DockerImageManager.getImagePath(
-                toolName,
-                toolVersion,
-                config.nexus.registry,
-                config.nexus.project
-            )
-
-            echo "Pulling Docker image from Nexus: ${imagePath}"
-
-            // Use Docker registry with credentials
-            docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
-                def image = docker.image(imagePath)
-
-                echo "Pulling image"
-                image.pull()
-
-                // Run container and check versions
-                image.inside {
-                    sh 'python --version'
-                    sh 'pip --version'
-                    sh 'pytest --version || true'
+    // Pull Docker image and run ALL stages inside single container session
+    script {
+        logger.info("PULLING PYTHON IMAGE FROM NEXUS")
+        
+        def imageConfig = DockerImageManager.getImageConfig(config.project_language, config)
+        logger.info("Pulling Docker image: ${imageConfig.imagePath}")
+        
+        docker.withRegistry(imageConfig.registryUrl, imageConfig.credentialsId) {
+            def image = docker.image(imageConfig.imagePath)
+            
+            logger.info("⬇️ Pulling image...")
+            // Check if image exists locally first
+            def imageExists = sh(
+                script: "docker images -q ${imageConfig.imagePath}",
+                returnStdout: true
+            ).trim()
+            
+            if (!imageExists) {
+                logger.info("Image not found locally, pulling from registry...")
+                retry(3) {
+                    try {
+                        image.pull()
+                    } catch (Exception e) {
+                        logger.warning("Image pull attempt failed: ${e.getMessage()}")
+                        sleep(5) // Wait 5 seconds before retry
+                        throw e
+                    }
+                }
+            } else {
+                logger.info("Using cached Docker image")
+            }
+            
+            // Verify image works
+            image.inside {
+                sh 'python --version'
+                sh 'pip --version'
+            }
+            
+            logger.info("✅ Python image ready!")
+            env.PYTHON_DOCKER_IMAGE = imageConfig.imagePath
+            stageResults['Pull Image'] = 'SUCCESS'
+            
+            // Run ALL stages inside this single Docker container session
+            image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
+                
+                stage('Setup') {
+                    logger.info("SETUP STAGE")
+                    core_utils.setupProjectEnvironment(config.project_language, config)
+                    sh script: PythonScript.pythonVersionCommand()
+                    stageResults['Setup'] = 'SUCCESS'
                 }
 
-                echo "Python image ready."
-
-                env.PYTHON_DOCKER_IMAGE = imagePath
-            }
-        }
-    }
-
-    stage('Setup') {
-        script {
-            try {
-                logger.info("SETUP STAGE")
-                core_utils.setupProjectEnvironment(config.project_language, config)
-                sh script: PythonScript.pythonVersionCommand()
-                sh script: PythonScript.pipVersionCommand()
-                sh script: PythonScript.createVirtualEnvCommand()
-                logger.info("Virtual environment created successfully")
-                stageResults['Setup'] = 'SUCCESS'
-            } catch (Exception e) {
-                logger.error("Setup failed: ${e.message}")
-                stageResults['Setup'] = 'FAILED'
-                logger.error("Setup stage failed")
-            }
-        }
-    }
-
-    stage('Install Dependencies') {
-        script {
-            logger.info("INSTALL DEPENDENCIES STAGE - Installing in virtual environment")
-
-            docker.withRegistry(config.nexus.url, config.nexus.credentials_id) {
-                def image = docker.image(env.PYTHON_DOCKER_IMAGE)
-
-                image.inside("-v ${WORKSPACE}:/workspace -w /workspace") {
+                stage('Install Dependencies') {
+                    logger.info("INSTALL DEPENDENCIES STAGE - Installing in virtual environment")
+                    // Create virtual environment first
+                    sh script: PythonScript.createVirtualEnvCommand()
+                    logger.info("Virtual environment created successfully")
+                    
                     def result = core_build.installDependencies('python','pip', config)
                     
                     if (result) {
@@ -103,133 +102,133 @@ def call(Map config = [:]) {
                         logger.error("Dependency installation failed inside core_build")
                     }
                 }
-            }
-        }
-    }
 
 
-    stage('Lint') {
-        if (core_utils.shouldExecuteStage('lint', config)) {
-            script {
-                logger.info("LINTING STAGE")
-                def lintResult = lint_utils.runLint(config)
-                env.LINT_RESULT = lintResult
-                stageResults['Lint'] = lintResult
-                logger.info("Lint stage completed with result: ${lintResult}")
-            }
-        } else {
-            script {
-                logger.info("Linting is disabled - skipping")
-                env.LINT_RESULT = 'SKIPPED'
-                stageResults['Lint'] = 'SKIPPED'
-            }
-        }
-    }
-    
-
-    stage('Build') {
-        script {
-            logger.info("BUILDING STAGE")
-            
-            def result = core_build.buildLanguages(config.project_language, config)
-
-            if (result) {
-                stageResults['Build'] = 'SUCCESS'
-            } else {
-                stageResults['Build'] = 'FAILED'
-                logger.error("Build failed")
-            }
-        }
-    }
-
-    
-    stage('Test Execution') {
-        script {
-            def parallelTests = [:]
-            
-            if (core_utils.shouldExecuteStage('unittest', config)) {
-                parallelTests['Unit Test'] = {
-                    logger.info("Running Unit Tests")
-                    def testResult = core_test.runUnitTest(config)
-                    env.UNIT_TEST_RESULT = testResult
-                    stageResults['Unit Test'] = testResult
-                    logger.info("Unit test stage completed with result: ${testResult}")
+                stage('Lint') {
+                    if (core_utils.shouldExecuteStage('lint', config)) {
+                        logger.info("LINTING STAGE")
+                        def lintResult = lint_utils.runLint(config)
+                        env.LINT_RESULT = lintResult
+                        stageResults['Lint'] = lintResult
+                        logger.info("Lint stage completed with result: ${lintResult}")
+                    } else {
+                        logger.info("Linting is disabled - skipping")
+                        env.LINT_RESULT = 'SKIPPED'
+                        stageResults['Lint'] = 'SKIPPED'
+                    }
                 }
-            } else {
-                logger.info("Unit testing is disabled - skipping")
-                env.UNIT_TEST_RESULT = 'SKIPPED'
-                stageResults['Unit Test'] = 'SKIPPED'
-            }
-            
-            if (core_utils.shouldExecuteStage('functionaltest', config) || 
-                core_utils.shouldExecuteStage('smoketest', config) || 
-                core_utils.shouldExecuteStage('sanitytest', config) || 
-                core_utils.shouldExecuteStage('regressiontest', config)) {
-                
-                parallelTests['Functional Tests'] = {
-                    logger.info("Starting Functional Tests with Individual Stages")
+
+                stage('Build') {
+                    logger.info("BUILDING STAGE")
                     
-                    stage('Smoke Tests') {
-                        if (core_utils.shouldExecuteStage('smoketest', config)) {
-                            logger.info("Running Smoke Tests")
-                            sh script: PythonScript.venvSmokeTestLinuxCommand()
-                            env.SMOKE_TEST_RESULT = 'SUCCESS'
-                            stageResults['Smoke Tests'] = 'SUCCESS'
-                            logger.info("Smoke Tests completed successfully")
-                        } else {
-                            logger.info("Smoke Tests are disabled - skipping")
-                            env.SMOKE_TEST_RESULT = 'SKIPPED'
-                            stageResults['Smoke Tests'] = 'SKIPPED'
-                        }
-                    }
+                    def result = core_build.buildLanguages(config.project_language, config)
 
-                    stage('Sanity Tests') {
-                        if (core_utils.shouldExecuteStage('sanitytest', config)) {
-                            logger.info("Running Sanity Tests")
-                            sh script: PythonScript.venvSanityTestLinuxCommand()
-                            env.SANITY_TEST_RESULT = 'SUCCESS'
-                            stageResults['Sanity Tests'] = 'SUCCESS'
-                            logger.info("Sanity Tests completed successfully")
-                        } else {
-                            logger.info("Sanity Tests are disabled - skipping")
-                            env.SANITY_TEST_RESULT = 'SKIPPED'
-                            stageResults['Sanity Tests'] = 'SKIPPED'
-                        }
+                    if (result) {
+                        stageResults['Build'] = 'SUCCESS'
+                    } else {
+                        stageResults['Build'] = 'FAILED'
+                        logger.error("Build failed")
                     }
+                }
 
-                    stage('Regression Tests') {
-                        if (core_utils.shouldExecuteStage('regressiontest', config)) {
-                            logger.info("Running Regression Tests")
-                            sh script: PythonScript.venvRegressionTestLinuxCommand()
-                            env.REGRESSION_TEST_RESULT = 'SUCCESS'
-                            stageResults['Regression Tests'] = 'SUCCESS'
-                            logger.info("Regression Tests completed successfully")
-                        } else {
-                            logger.info("Regression Tests are disabled - skipping")
-                            env.REGRESSION_TEST_RESULT = 'SKIPPED'
-                            stageResults['Regression Tests'] = 'SKIPPED'
+                stage('Test Execution') {
+                    def parallelTests = [:]
+                    
+                    if (core_utils.shouldExecuteStage('unittest', config)) {
+                        parallelTests['Unit Test'] = {
+                            logger.info("Running Unit Tests")
+                            def testResult = core_test.runUnitTest(config)
+                            env.UNIT_TEST_RESULT = testResult
+                            stageResults['Unit Test'] = testResult
+                            logger.info("Unit test stage completed with result: ${testResult}")
                         }
+                    } else {
+                        logger.info("Unit testing is disabled - skipping")
+                        env.UNIT_TEST_RESULT = 'SKIPPED'
+                        stageResults['Unit Test'] = 'SKIPPED'
                     }
                     
-                    // env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
-                    def allPassed = [env.SMOKE_TEST_RESULT, env.SANITY_TEST_RESULT, env.REGRESSION_TEST_RESULT].every { it == 'SUCCESS' }
-                    env.FUNCTIONAL_TEST_RESULT = allPassed ? 'SUCCESS' : 'FAILED'
+                    if (core_utils.shouldExecuteStage('functionaltest', config) || 
+                        core_utils.shouldExecuteStage('smoketest', config) || 
+                        core_utils.shouldExecuteStage('sanitytest', config) || 
+                        core_utils.shouldExecuteStage('regressiontest', config)) {
+                        
+                        parallelTests['Functional Tests'] = {
+                            logger.info("Starting Functional Tests with Individual Stages")
+                            
+                            // Functional tests run in same container - no additional Docker calls
+                            stage('Smoke Tests') {
+                                if (core_utils.shouldExecuteStage('smoketest', config)) {
+                                    logger.info("Running Smoke Tests")
+                                    sh script: PythonScript.venvSmokeTestLinuxCommand()
+                                    env.SMOKE_TEST_RESULT = 'SUCCESS'
+                                    stageResults['Smoke Tests'] = 'SUCCESS'
+                                    logger.info("Smoke Tests completed successfully")
+                                } else {
+                                    logger.info("Smoke Tests are disabled - skipping")
+                                    env.SMOKE_TEST_RESULT = 'SKIPPED'
+                                    stageResults['Smoke Tests'] = 'SKIPPED'
+                                }
+                            }
+                            
+                            stage('Sanity Tests') {
+                                if (core_utils.shouldExecuteStage('sanitytest', config)) {
+                                    logger.info("Running Sanity Tests")
+                                    sh script: PythonScript.venvSanityTestLinuxCommand()
+                                    env.SANITY_TEST_RESULT = 'SUCCESS'
+                                    stageResults['Sanity Tests'] = 'SUCCESS'
+                                    logger.info("Sanity Tests completed successfully")
+                                } else {
+                                    logger.info("Sanity Tests are disabled - skipping")
+                                    env.SANITY_TEST_RESULT = 'SKIPPED'
+                                    stageResults['Sanity Tests'] = 'SKIPPED'
+                                }
+                            }
+                            
+                            stage('Regression Tests') {
+                                if (core_utils.shouldExecuteStage('regressiontest', config)) {
+                                    logger.info("Running Regression Tests")
+                                    sh script: PythonScript.venvRegressionTestLinuxCommand()
+                                    env.REGRESSION_TEST_RESULT = 'SUCCESS'
+                                    stageResults['Regression Tests'] = 'SUCCESS'
+                                    logger.info("Regression Tests completed successfully")
+                                } else {
+                                    logger.info("Regression Tests are disabled - skipping")
+                                    env.REGRESSION_TEST_RESULT = 'SKIPPED'
+                                    stageResults['Regression Tests'] = 'SKIPPED'
+                                }
+                            }
+                            
+                            // Determine overall functional test result
+                            def testResults = [env.SMOKE_TEST_RESULT, env.SANITY_TEST_RESULT, env.REGRESSION_TEST_RESULT]
+                            def allPassed = testResults.every { it == 'SUCCESS' || it == 'SKIPPED' }
+                            def anyFailed = testResults.any { it == 'FAILED' }
+                            
+                            if (anyFailed) {
+                                env.FUNCTIONAL_TEST_RESULT = 'FAILED'
+                            } else if (allPassed && testResults.any { it == 'SUCCESS' }) {
+                                env.FUNCTIONAL_TEST_RESULT = 'SUCCESS'
+                            } else {
+                                env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
+                            }
 
-                    logger.info("All Functional Test Stages completed with result: ${env.FUNCTIONAL_TEST_RESULT}")
+                            logger.info("All Functional Test Stages completed with result: ${env.FUNCTIONAL_TEST_RESULT}")
+                        }
+                    } else {
+                        logger.info("All functional tests are disabled - skipping")
+                        env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
+                        stageResults['Functional Tests'] = 'SKIPPED'
+                    }
+                    
+                    if (parallelTests.size() > 0) {
+                        parallel parallelTests
+                    } else {
+                        logger.info("No tests are enabled - skipping test execution")
+                    }
                 }
-            } else {
-                logger.info("All functional tests are disabled - skipping")
-                env.FUNCTIONAL_TEST_RESULT = 'SKIPPED'
-                stageResults['Functional Tests'] = 'SKIPPED'
-            }
-            
-            if (parallelTests.size() > 0) {
-                parallel parallelTests
-            } else {
-                logger.info("No tests are enabled - skipping test execution")
-            }
-        }
-    }
+            } // End of Docker container session
+        } // End of Docker registry
+    } // End of script block
     
     stage('Generate Reports') {
         script {
