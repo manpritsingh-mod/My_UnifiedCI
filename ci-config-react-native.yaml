@@ -1,0 +1,105 @@
+# React Native CI Configuration Example
+# This configuration supports both Android and iOS builds with comprehensive testing
+
+# Project Configuration
+project_name: "MyReactNativeApp"
+project_language: "react-native"
+build_type: "debug"  # debug or release
+
+# Platform Configuration
+test_platforms:
+  - android
+  - ios
+
+# Device Configuration
+device_type: "virtual"  # virtual or real
+android_avd: "Pixel_4_API_30"
+ios_device: "iPhone 14"
+
+# Testing Tools Configuration
+tool_for_unit_testing:
+  react_native: "jest"  # jest, detox, appium, maestro
+
+tool_for_lint_testing:
+  react_native: "eslint"  # eslint, prettier, typescript, all
+
+# Pipeline Stages Configuration
+stages:
+  checkout: true
+  lint: true
+  unittest: true
+  e2e_test: true
+  functionaltest: false
+  smoketest: false
+  sanitytest: false
+  regressiontest: false
+
+# Nexus Repository Configuration
+nexus:
+  registry: "your-nexus-registry.com:8082"
+  url: "https://your-nexus-registry.com:8081"
+  credentials_id: "nexus-credentials"
+  project: "mobile-ci"
+
+# Docker Image Configuration
+docker:
+  react_native:
+    image: "react-native-android"
+    tag: "latest"
+    registry: "your-nexus-registry.com:8082"
+
+# Notification Configuration
+notifications:
+  email:
+    enabled: true
+    recipients:
+      - "mobile-team@company.com"
+      - "qa-team@company.com"
+  slack:
+    enabled: true
+    channel: "#mobile-builds"
+
+# Build Configuration
+build:
+  android:
+    enabled: true
+    build_type: "debug"  # debug or release
+    sign_apk: false
+  ios:
+    enabled: true
+    build_type: "Debug"  # Debug or Release
+    sign_ipa: false
+
+# Test Configuration
+test:
+  unit:
+    coverage_threshold: 80
+    generate_reports: true
+  e2e:
+    timeout: 300  # seconds
+    retry_count: 2
+    capture_screenshots: true
+    capture_videos: true
+
+# Quality Gates
+quality_gates:
+  lint_errors_threshold: 0
+  test_coverage_threshold: 80
+  build_success_required: true
+
+# Reporting Configuration
+reporting:
+  allure:
+    enabled: true
+    generate_history: true
+  junit:
+    enabled: true
+  coverage:
+    enabled: true
+    format: "lcov"
+
+# Environment Variables (optional)
+environment:
+  ANDROID_HOME: "/opt/android-sdk"
+  JAVA_HOME: "/usr/lib/jvm/java-11-openjdk"
+  NODE_ENV: "test"

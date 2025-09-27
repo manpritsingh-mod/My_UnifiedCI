@@ -91,6 +91,50 @@ def copyAllTestFiles() {
             }
         }
         
+        // Look for React Native test files
+        if (fileExists('junit.xml')) {
+            try {
+                sh "cp junit.xml allure-results/"
+                foundAny = true
+                logger.info("Copied React Native Jest test: junit.xml")
+            } catch (Exception e) {
+                logger.info("Could not copy junit.xml")
+            }
+        }
+        
+        // Look for React Native mobile test artifacts
+        if (fileExists('test-artifacts')) {
+            try {
+                sh "cp -r test-artifacts/* allure-results/ 2>/dev/null || true"
+                foundAny = true
+                logger.info("Copied React Native mobile test artifacts")
+            } catch (Exception e) {
+                logger.info("Could not copy mobile test artifacts")
+            }
+        }
+        
+        // Look for React Native APK/IPA files
+        if (fileExists('android/app/build/outputs/apk')) {
+            try {
+                sh "find android/app/build/outputs/apk -name '*.apk' -exec cp {} allure-results/ \\; 2>/dev/null || true"
+                foundAny = true
+                logger.info("Copied Android APK files")
+            } catch (Exception e) {
+                logger.info("Could not copy APK files")
+            }
+        }
+        
+        if (fileExists('ios/build')) {
+            try {
+                sh "find ios/build -name '*.ipa' -exec cp {} allure-results/ \\; 2>/dev/null || true"
+                sh "find ios/build -name '*.app' -exec cp -r {} allure-results/ \\; 2>/dev/null || true"
+                foundAny = true
+                logger.info("Copied iOS build artifacts")
+            } catch (Exception e) {
+                logger.info("Could not copy iOS artifacts")
+            }
+        }
+        
     } catch (Exception e) {
         logger.info("Error looking for test files: ${e.getMessage()}")
     }

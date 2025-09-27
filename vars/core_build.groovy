@@ -13,12 +13,14 @@ def buildLanguages(String language, Map config = [:]) {
     
     def result = false
     
-    if (language in ['java-maven', 'java-gradle']) {
-        result = buildJavaApp(language == 'java-maven' ? 'maven' : 'gradle', config)
+    if (language in ['maven', 'gradle']) {
+        result = buildJavaApp(language, config)
     } else if (language == 'python') {
         result = buildPythonApp(config)
-    } else if (language in ['react', 'nodejs']) {
+    } else if (language == 'react') {
         result = buildReactApp(config)
+    } else if (language == 'react-native') {
+        result = buildReactNativeApp(config)
     } else {
         logger.error("Unsupported language: ${language}")
         result = false
@@ -180,8 +182,9 @@ def installDependencies(String language, String buildTool, Map config = [:]){
             case 'python':
                 return installPythonDependencies(config)
             case 'react':
-            case 'nodejs':
                 return installReactDependencies(config)
+            case 'react-native':
+                return installReactNativeDependencies(config)
             default:
                 logger.error("Unsupported language for dependencies installation: ${language}")
                 return false
@@ -312,5 +315,35 @@ def task_reactDependencies(Map config = [:]){
     } else {
         logger.warning("No package.json found - skipping dependency installation")
         return true
+    }
+}
+
+/**
+ * Build React Native app using mobile_build utilities
+ * @param config Pipeline configuration map
+ * @return Boolean true if build succeeds
+ */
+def buildReactNativeApp(Map config = [:]) {
+    logger.info("Building React Native app")
+    try {
+        return mobile_build.buildReactNativeApp(config)
+    } catch (Exception e) {
+        logger.error("React Native Build error: ${e.getMessage()}")
+        return false
+    }
+}
+
+/**
+ * Install React Native dependencies (npm + CocoaPods)
+ * @param config Pipeline configuration map
+ * @return Boolean true if installation succeeds
+ */
+def installReactNativeDependencies(Map config = [:]) {
+    logger.info("Installing React Native dependencies")
+    try {
+        return mobile_build.installReactNativeDependencies(config)
+    } catch (Exception e) {
+        logger.error("React Native Dependencies installation failed: ${e.getMessage()}")
+        return false
     }
 }

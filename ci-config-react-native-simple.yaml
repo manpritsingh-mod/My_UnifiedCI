@@ -1,0 +1,76 @@
+# Simple React Native CI Configuration - Physical Devices Only
+# Teams connect their physical Android/iOS devices via USB for testing
+
+# Project Configuration
+project_name: "MyReactNativeApp"
+project_language: "react-native"
+build_type: "debug"  # debug or release
+
+# Testing Tools Configuration
+tool_for_unit_testing:
+  react_native: "detox"  # detox, appium, maestro
+
+tool_for_lint_testing:
+  react_native: "eslint"  # eslint, prettier, typescript
+
+# Pipeline Stages Configuration
+stages:
+  checkout: true
+  lint: true
+  unittest: true
+  device_test: true  # Test on connected physical devices
+
+# Android Configuration
+android:
+  package_name: "com.myreactnativeapp"  # Your app's package name
+  build_type: "debug"
+
+# iOS Configuration (macOS only)
+ios:
+  bundle_id: "com.myreactnativeapp"  # Your app's bundle ID
+  build_type: "Debug"
+
+# Nexus Repository Configuration
+nexus:
+  registry: "your-nexus-registry.com:8082"
+  url: "https://your-nexus-registry.com:8081"
+  credentials_id: "nexus-credentials"
+  project: "mobile-ci"
+
+# Docker Image Configuration
+docker:
+  react_native:
+    image: "react-native-android"
+    tag: "latest"
+    registry: "your-nexus-registry.com:8082"
+
+# Notification Configuration
+notifications:
+  email:
+    enabled: true
+    recipients:
+      - "mobile-team@company.com"
+  slack:
+    enabled: false
+    channel: "#mobile-builds"
+
+# Quality Gates
+quality_gates:
+  lint_errors_threshold: 0
+  build_success_required: true
+  device_test_required: false  # Don't fail if no devices connected
+
+# Physical Device Instructions
+device_setup:
+  android:
+    instructions: |
+      1. Connect Android device via USB
+      2. Enable Developer Options
+      3. Enable USB Debugging
+      4. Run 'adb devices' to verify connection
+      5. Trust the computer when prompted
+  ios:
+    instructions: |
+      1. Connect iOS device via USB (macOS only)
+      2. Trust the computer when prompted
+      3. Ensure device is unlocked during testing
